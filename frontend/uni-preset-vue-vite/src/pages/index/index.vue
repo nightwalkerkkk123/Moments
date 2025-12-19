@@ -7,8 +7,15 @@
 <script>
 export default {
   onLoad() {
-    // 重定向到 discover 页面（tabBar 首页）
-    uni.reLaunch({
+    // 登录态检查：无 token 则跳登录，有 token 进首页
+    const token = uni.getStorageSync('auth_token')
+    if (!token) {
+      uni.reLaunch({
+        url: '/pages/login/login'
+      })
+      return
+    }
+    uni.switchTab({
       url: '/pages/discover/discover'
     })
   }

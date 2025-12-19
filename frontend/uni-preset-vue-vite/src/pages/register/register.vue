@@ -135,6 +135,8 @@
 </template>
 
 <script>
+import * as api from '../../services/api'
+
 export default {
   data() {
     return {
@@ -146,6 +148,16 @@ export default {
         gender: '',
         age: ''
       },
+    
+    // 验证性别
+    validateGender() {
+      if (!this.formData.gender) {
+        this.errors.gender = '请选择性别'
+        return false
+      }
+      this.errors.gender = ''
+      return true
+    },
       showPassword: false,
       showConfirmPassword: false,
       loading: false,
@@ -297,47 +309,38 @@ export default {
       const passwordValid = this.validatePassword()
       const confirmPasswordValid = this.validateConfirmPassword()
       const ageValid = this.validateAge()
-      
-      if (!this.formData.gender) {
-        this.errors.gender = '请选择性别'
-      } else {
-        this.errors.gender = ''
-      }
-      
-      return nicknameValid && passwordValid && 
-             confirmPasswordValid && ageValid && 
-             this.formData.gender
+      const genderValid = this.validateGender()
+      return nicknameValid && passwordValid && confirmPasswordValid && ageValid && genderValid
     },
     
     // 处理注册
-    handleRegister() {
-      if (!this.validateForm()) {
-        return
-      }
-      
+    async handleRegister() {
+      if (!this.validateForm()) return
       this.loading = true
-      
-      // 模拟注册请求
-      setTimeout(() => {
-        this.loading = false
-        this.showSuccess = true
-        
-        // 这里可以添加实际的注册逻辑
-        console.log('注册信息:', {
-          nickname: this.formData.nickname,
+      try {
+        // 后端注册字段与前端字段的映射：
+        // username <- nickname, password <- password, email 可选
+        await api.registerApi({
+          username: this.formData.nickname,
           password: this.formData.password,
-          gender: this.formData.gender,
-          age: this.formData.age
+          email: '', // 可按需填写
+          first_name: '',
+          last_name: ''
         })
-        
-        // 3秒后跳转到登录页面
+        this.showSuccess = true
+        uni.showToast({ title: '注册成功', icon: 'success' })
         setTimeout(() => {
           this.showSuccess = false
           uni.navigateTo({
             url: '/pages/login/login'
           })
-        }, 3000)
-      }, 1500)
+        }, 1000)
+      } catch (err) {
+        const msg = err?.data ? JSON.stringify(err.data) : '注册失败，请稍后重试'
+        uni.showToast({ title: msg, icon: 'none', duration: 2000 })
+      } finally {
+        this.loading = false
+      }
     },
     
     // 跳转到登录页面

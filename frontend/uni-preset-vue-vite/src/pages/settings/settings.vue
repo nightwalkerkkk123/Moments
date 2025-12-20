@@ -112,21 +112,72 @@
 </template>
 
 <script>
+import { fetchMe, updateMe, changePassword, clearToken } from '@/services/api'
+
 export default {
   data() {
     return {
       showAccountModal: false,
       accountForm: {
-        avatar: 'https://picsum.photos/200',
-        nickname: '小程序用户',
-        signature: '记录生活 · 分享精彩',
+        avatar: '',
+        nickname: '',
+        signature: '',
         oldPassword: '',
         newPassword: '',
         confirmPassword: ''
-      }
+      },
+      loadingProfile: false
     }
   },
+  onShow() {
+    this.initProfile()
+  },
   methods: {
+    initProfile() {
+      const cached = uni.getStorageSync('current_user')
+      if (cached && cached.username) {
+        this.fillFormFromUser(cached)
+      }
+      this.pullProfile()
+    },
+    fillFormFromUser(user) {
+      this.accountForm.nickname = user.username || ''
+      this.accountForm.signature = (user.profile && user.profile.signature) || ''
+      this.accountForm.avatar = (user.profile && user.profile.avatar) || ''
+    },
+    async pullProfile() {
+      try {
+        this.loadingProfile = true
+        const data = await fetchMe()
+        this.fillFormFromUser(data)
+        uni.setStorageSync('current_user', data)
+        uni.$emit('profileUpdated', {
+          avatar: this.accountForm.avatar,
+          nickname: this.accountForm.nickname || '小程序用户',
+          signature: this.accountForm.signature || '记录生活 · 分享精彩'
+        })
+      } catch (err) {
+        // 未登录或接口失败时静默
+      } finally {
+        this.loadingProfile = false
+      }
+    },
+    async handleUpdateProfile(payload, successMsg = '已保存') {
+      try {
+        const data = await updateMe(payload)
+        uni.setStorageSync('current_user', data)
+        this.fillFormFromUser(data)
+        uni.$emit('profileUpdated', {
+          avatar: this.accountForm.avatar,
+          nickname: this.accountForm.nickname || '小程序用户',
+          signature: this.accountForm.signature || '记录生活 · 分享精彩'
+        })
+        uni.showToast({ title: successMsg, icon: 'success' })
+      } catch (err) {
+        const msg = err?.data?.detail || err?.data?.error || '保存失败'
+        uni.showToast({ title: msg, icon: 'none' })
+      }
+    },
     handleBack() {
       uni.navigateBack()
     },
@@ -143,8 +194,7 @@ export default {
         sourceType: ['album', 'camera'],
         success: (res) => {
           this.accountForm.avatar = res.tempFilePaths[0]
-          uni.showToast({ title: '头像已更新', icon: 'success' })
-          this.emitProfileUpdate()
+          this.handleUpdateProfile({ profile: { avatar: this.accountForm.avatar } }, '头像已更新')
         },
         fail: () => {
           uni.showToast({ title: '选择失败', icon: 'none' })
@@ -157,9 +207,7 @@ export default {
         uni.showToast({ title: '昵称需2-20个字符', icon: 'none' })
         return
       }
-      uni.showToast({ title: '昵称已保存', icon: 'success' })
-      // TODO: 调用接口保存昵称
-      this.emitProfileUpdate()
+      this.handleUpdateProfile({ username: name }, '昵称已保存')
     },
     saveSignature() {
       const sig = this.accountForm.signature.trim()
@@ -167,11 +215,9 @@ export default {
         uni.showToast({ title: '签名不能超过60个字符', icon: 'none' })
         return
       }
-      uni.showToast({ title: '签名已保存', icon: 'success' })
-      // TODO: 调用接口保存签名
-      this.emitProfileUpdate()
+      this.handleUpdateProfile({ profile: { signature: sig } }, '签名已保存')
     },
-    savePassword() {
+    async savePassword() {
       const { oldPassword, newPassword, confirmPassword } = this.accountForm
       if (!oldPassword || !newPassword || !confirmPassword) {
         uni.showToast({ title: '请填写完整信息', icon: 'none' })
@@ -185,30 +231,38 @@ export default {
         uni.showToast({ title: '两次输入不一致', icon: 'none' })
         return
       }
-      uni.showToast({ title: '密码已更新', icon: 'success' })
-      // TODO: 调用接口保存密码
-      this.accountForm.oldPassword = ''
-      this.accountForm.newPassword = ''
-      this.accountForm.confirmPassword = ''
-    },
-    emitProfileUpdate() {
-      uni.$emit('profileUpdated', {
-        avatar: this.accountForm.avatar,
-        nickname: this.accountForm.nickname.trim() || '小程序用户',
-        signature: this.accountForm.signature.trim() || '记录生活 · 分享精彩'
-      })
+      try {
+        await changePassword({ old_password: oldPassword, new_password: newPassword })
+        uni.showToast({ title: '密码已更新', icon: 'success' })
+        this.accountForm.oldPassword = ''
+        this.accountForm.newPassword = ''
+        this.accountForm.confirmPassword = ''
+      } catch (err) {
+        const msg = err?.data?.detail || err?.data?.error || '更新失败'
+        uni.showToast({ title: msg, icon: 'none' })
+      }
     },
     handleLogout() {
       uni.showModal({
         title: '提示',
         content: '确定要退出登录吗？',
-        success: (res) => {
+        success: async (res) => {
           if (res.confirm) {
+            try {
+              // 后端注销为可选，失败不阻塞前端退出
+              await uni.request({
+                url: 'http://127.0.0.1:8000/api/auth/logout/',
+                method: 'POST',
+                header: { Authorization: `Token ${uni.getStorageSync('auth_token') || ''}` }
+              })
+            } catch (e) {
+              // ignore
+            }
+            clearToken()
             uni.showToast({ title: '已退出登录', icon: 'success' })
-            // 延迟返回，让用户看到成功提示
             setTimeout(() => {
-              uni.navigateBack()
-            }, 1500)
+              uni.reLaunch({ url: '/pages/login/login' })
+            }, 800)
           }
         }
       })

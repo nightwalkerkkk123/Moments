@@ -116,6 +116,19 @@ class CommentListCreateView(generics.ListCreateAPIView):
             post=post,
             type='comment'
         )
+    
+    # 重写create方法，匹配文档格式
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response({
+            'success': True,
+            'data': {
+                'comment': serializer.data
+            }
+        }, status=status.HTTP_201_CREATED, headers=headers)
 
     # 重写list方法，匹配文档格式
     def list(self, request, *args, **kwargs):

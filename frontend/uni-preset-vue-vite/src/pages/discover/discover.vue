@@ -154,179 +154,25 @@
 </template>
 
 <script>
+import { getPostsApi, likePostApi, getCommentsApi, createCommentApi, getNotificationsApi, markAsReadApi } from '../../services/api'
+
 export default {
   data() {
     return {
       statusBarHeight: 0, // 状态栏高度
       capsuleHeight: 0,   // 胶囊高度
       topPadding: 0,       // 页面顶部预留边距
-      posts: [
-        {
-          id: 1,
-          name: '沐白',
-          avatar: 'https://picsum.photos/200?1',
-          time: '2分钟前',
-          text: '周末徒步，山顶风景太美啦！',
-          type: 'image',
-          media: [
-            'https://picsum.photos/400?2',
-            'https://picsum.photos/400?3',
-            'https://picsum.photos/400?4'
-          ],
-          tag: '户外',
-          likes: 32,
-          comments: 6,
-          liked: false
-        },
-        {
-          id: 2,
-          name: '阿宁',
-          avatar: 'https://picsum.photos/200?5',
-          time: '10分钟前',
-          text: '简单的日常记录，阳光很好 ☀️',
-          type: 'video',
-          media: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-          poster: 'https://picsum.photos/400?6',
-          tag: '日常',
-          likes: 18,
-          comments: 4,
-          liked: true
-        }
-      ],
-      notifyCount: 3,
+      posts: [],           // 动态列表，从API获取
+      notifyCount: 0,      // 通知数量，从API获取
       showCommentModal: false,
       currentPostId: null,
       currentPostComments: [],
       newCommentText: '',
       submittingComment: false,
       showNotifyModal: false,
-      notifications: [
-        {
-          id: 1,
-          type: 'like',
-          name: '小美',
-          avatar: 'https://picsum.photos/200?10',
-          time: '刚刚',
-          read: false,
-          postId: 1,
-          postText: '周末徒步，山顶风景太美啦！'
-        },
-        {
-          id: 2,
-          type: 'comment',
-          name: '阿强',
-          avatar: 'https://picsum.photos/200?11',
-          time: '2分钟前',
-          read: false,
-          postId: 1,
-          postText: '周末徒步，山顶风景太美啦！',
-          commentContent: '这是哪里呀？求推荐路线'
-        },
-        {
-          id: 3,
-          type: 'like',
-          name: '小雨',
-          avatar: 'https://picsum.photos/200?12',
-          time: '5分钟前',
-          read: false,
-          postId: 2,
-          postText: '简单的日常记录，阳光很好 ☀️'
-        },
-        {
-          id: 4,
-          type: 'comment',
-          name: '小明',
-          avatar: 'https://picsum.photos/200?13',
-          time: '10分钟前',
-          read: true,
-          postId: 1,
-          postText: '周末徒步，山顶风景太美啦！',
-          commentContent: '照片拍得真好，设备是什么？'
-        },
-        {
-          id: 5,
-          type: 'like',
-          name: '小红',
-          avatar: 'https://picsum.photos/200?14',
-          time: '15分钟前',
-          read: true,
-          postId: 101,
-          postText: '备忘：下周和朋友去露营，记得带咖啡壶。'
-        },
-        {
-          id: 6,
-          type: 'comment',
-          name: '小张',
-          avatar: 'https://picsum.photos/200?16',
-          time: '20分钟前',
-          read: true,
-          postId: 2,
-          postText: '简单的日常记录，阳光很好 ☀️',
-          commentContent: '阳光真好，心情也变好了'
-        }
-      ],
-      commentsData: {
-        1: [
-          {
-            id: 101,
-            name: '小美',
-            avatar: 'https://picsum.photos/200?10',
-            content: '风景真不错！下次也想去',
-            time: '1分钟前'
-          },
-          {
-            id: 102,
-            name: '阿强',
-            avatar: 'https://picsum.photos/200?11',
-            content: '这是哪里呀？求推荐路线',
-            time: '5分钟前'
-          },
-          {
-            id: 103,
-            name: '小雨',
-            avatar: 'https://picsum.photos/200?12',
-            content: '👍👍👍',
-            time: '10分钟前'
-          },
-          {
-            id: 104,
-            name: '小明',
-            avatar: 'https://picsum.photos/200?13',
-            content: '照片拍得真好，设备是什么？',
-            time: '15分钟前'
-          },
-          {
-            id: 105,
-            name: '小红',
-            avatar: 'https://picsum.photos/200?14',
-            content: '周末也去爬山了，天气真好',
-            time: '20分钟前'
-          },
-          {
-            id: 106,
-            name: '小李',
-            avatar: 'https://picsum.photos/200?15',
-            content: '羡慕了，我也想去',
-            time: '30分钟前'
-          }
-        ],
-        2: [
-          {
-            id: 201,
-            name: '小张',
-            avatar: 'https://picsum.photos/200?16',
-            content: '阳光真好，心情也变好了',
-            time: '2分钟前'
-          },
-          {
-            id: 202,
-            name: '小王',
-            avatar: 'https://picsum.photos/200?17',
-            content: '日常记录很棒',
-            time: '8分钟前'
-          }
-        ]
-      }
+      notifications: [],   // 通知列表，从API获取
+      loading: false,      // 加载状态
+      error: null          // 错误信息
     }
   },
   computed: {
@@ -336,7 +182,8 @@ export default {
     }
   },
   onLoad() {
-    this.updateUnreadCount()
+    this.fetchPosts()
+    this.fetchNotifications()
     this.calculateScrollHeight()
     this.setStatusBar()
     this.calculateSafeArea()
@@ -348,6 +195,9 @@ export default {
   onShow() {
     this.calculateScrollHeight()
     this.setStatusBar()
+    // 每次显示页面时刷新数据
+    this.fetchPosts()
+    this.fetchNotifications()
   },
   methods: {
     goToSearch() {
@@ -355,16 +205,96 @@ export default {
         url: '/pages/search/search'
       })
     },
-    toggleLike(item) {
-      item.liked = !item.liked
-      item.likes += item.liked ? 1 : -1
-      this.$forceUpdate()
+    // 获取动态列表
+    async fetchPosts() {
+      this.loading = true
+      try {
+        const response = await getPostsApi()
+        console.log('动态列表响应:', response)
+        if (response.success) {
+          this.posts = response.data.posts.map(post => ({
+            id: post.id,
+            name: post.name,
+            avatar: post.avatar || 'https://picsum.photos/200',
+            time: post.time,
+            text: post.text,
+            type: post.type || 'image',
+            media: post.media || [],
+            poster: '',
+            tag: post.tag || '',
+            likes: post.likes,
+            comments: post.comments,
+            liked: post.liked || false
+          }))
+        }
+      } catch (error) {
+        console.error('获取动态失败:', error)
+        uni.showToast({ title: '获取动态失败', icon: 'none' })
+      } finally {
+        this.loading = false
+      }
     },
-    handleComment(item) {
+    // 获取通知列表
+    async fetchNotifications() {
+      try {
+        const response = await getNotificationsApi()
+        console.log('通知列表响应:', response)
+        if (response.success) {
+          this.notifications = response.data.notifications.map(notify => ({
+            id: notify.id,
+            type: notify.type,
+            name: notify.name,
+            avatar: notify.avatar || 'https://picsum.photos/200',
+            time: notify.time,
+            read: notify.read,
+            postId: notify.post_id || notify.post?.id,
+            postText: notify.post_text || notify.post?.content,
+            commentContent: notify.comment_content || notify.comment?.content
+          }))
+          this.notifyCount = response.data.total_unread
+        }
+      } catch (error) {
+        console.error('获取通知失败:', error)
+        // 不显示错误提示，避免影响用户体验
+      }
+    },
+    // 点赞/取消点赞
+    async toggleLike(item) {
+      try {
+        const newLikedState = !item.liked
+        const response = await likePostApi({ postId: item.id, liked: newLikedState })
+        if (response.success) {
+          item.liked = newLikedState
+          item.likes = response.data.likes
+        }
+      } catch (error) {
+        console.error('点赞操作失败:', error)
+        uni.showToast({ title: '操作失败', icon: 'none' })
+      }
+    },
+    // 查看评论
+    async handleComment(item) {
       this.currentPostId = item.id
-      this.currentPostComments = this.commentsData[item.id] || []
       this.showCommentModal = true
       this.newCommentText = ''
+      
+      try {
+        const response = await getCommentsApi({ postId: item.id })
+        console.log('获取评论响应:', response)
+        if (response.success) {
+          this.currentPostComments = response.data.comments.map(comment => ({
+            id: comment.id,
+            name: comment.name,
+            avatar: comment.avatar,
+            content: comment.content,
+            time: comment.time
+          }))
+        }
+      } catch (error) {
+        console.error('获取评论失败:', error)
+        this.currentPostComments = []
+        uni.showToast({ title: '获取评论失败', icon: 'none' })
+      }
     },
     closeCommentModal() {
       this.showCommentModal = false
@@ -372,6 +302,7 @@ export default {
       this.currentPostComments = []
       this.newCommentText = ''
     },
+    // 提交评论
     async submitComment() {
       const content = this.newCommentText.trim()
       if (!content) {
@@ -381,31 +312,36 @@ export default {
 
       this.submittingComment = true
 
-      setTimeout(() => {
-        const newComment = {
-          id: Date.now(),
-          name: '我',
-          avatar: 'https://picsum.photos/200',
-          content: content,
-          time: '刚刚'
+      try {
+        const response = await createCommentApi({ postId: this.currentPostId, content })
+        if (response.success) {
+          // 更新评论列表
+          const newComment = {
+            id: response.data.comment.id,
+            name: '我',
+            avatar: 'https://picsum.photos/200',
+            content: content,
+            time: '刚刚'
+          }
+          this.currentPostComments.unshift(newComment)
+          
+          // 更新动态的评论数
+          const post = this.posts.find(p => p.id === this.currentPostId)
+          if (post) {
+            post.comments++
+          }
+          
+          this.newCommentText = ''
+          uni.showToast({ title: '评论成功', icon: 'success' })
         }
-
-        if (!this.commentsData[this.currentPostId]) {
-          this.commentsData[this.currentPostId] = []
-        }
-        this.commentsData[this.currentPostId].unshift(newComment)
-        this.currentPostComments = this.commentsData[this.currentPostId]
-
-        const post = this.posts.find(p => p.id === this.currentPostId)
-        if (post) {
-          post.comments++
-        }
-
-        this.newCommentText = ''
+      } catch (error) {
+        console.error('提交评论失败:', error)
+        uni.showToast({ title: '评论失败', icon: 'none' })
+      } finally {
         this.submittingComment = false
-        uni.showToast({ title: '评论成功', icon: 'success' })
-      }, 500)
+      }
     },
+    // 查看通知
     handleNotify() {
       this.showNotifyModal = true
     },
@@ -434,10 +370,17 @@ export default {
       }
       return text
     },
-    handleNotifyClick(notification) {
+    // 点击通知
+    async handleNotifyClick(notification) {
       if (!notification.read) {
-        notification.read = true
-        this.updateUnreadCount()
+        // 标记为已读
+        try {
+          await markAsReadApi({ notificationIds: [notification.id] })
+          notification.read = true
+          this.fetchNotifications() // 刷新通知列表
+        } catch (error) {
+          console.error('标记已读失败:', error)
+        }
       }
       
       this.closeNotifyModal()
@@ -459,12 +402,16 @@ export default {
         }, 300)
       }
     },
-    markAllAsRead() {
-      this.notifications.forEach(notify => {
-        notify.read = true
-      })
-      this.updateUnreadCount()
-      uni.showToast({ title: '已全部标记为已读', icon: 'success' })
+    // 标记所有通知为已读
+    async markAllAsRead() {
+      try {
+        await markAsReadApi({ notificationIds: [] })
+        this.fetchNotifications() // 刷新通知列表
+        uni.showToast({ title: '已全部标记为已读', icon: 'success' })
+      } catch (error) {
+        console.error('标记全部已读失败:', error)
+        uni.showToast({ title: '操作失败', icon: 'none' })
+      }
     },
     updateUnreadCount() {
       this.notifyCount = this.notifications.filter(n => !n.read).length

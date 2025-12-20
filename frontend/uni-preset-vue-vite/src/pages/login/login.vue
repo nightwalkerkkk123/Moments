@@ -13,15 +13,18 @@
     <view class="success-message" v-if="showSuccess">登录成功！</view>
 
     <!-- 登录表单 -->
-    <view class="form-container">
+    <scroll-view class="form-scroll" scroll-y>
+      <view class="form-container">
       <view class="form-group" :class="{ error: errors.username }">
         <text class="label">账号</text>
         <view class="input-wrapper">
           <input 
-            type="text" 
-            :value="formData.username"
+            type="text"
+            v-model="formData.username"
             class="form-input" 
             placeholder="请输入账号"
+            placeholder-class="input-placeholder"
+            placeholder-style="color:#b2b2b2;"
             @blur="validateUsername"
             @input="handleUsernameInput"
             confirm-type="next"
@@ -35,15 +38,18 @@
         <text class="label">密码</text>
         <view class="input-wrapper">
           <input 
+            type="text"
             :password="!showPassword"
-            :value="formData.password"
+            v-model="formData.password"
             class="form-input" 
             placeholder="请输入密码"
+            placeholder-class="input-placeholder"
+            placeholder-style="color:#b2b2b2;"
             @blur="validatePassword"
             @input="handlePasswordInput"
             confirm-type="done"
           />
-          <text class="toggle-password" @click="togglePassword">
+          <text class="toggle-password" @tap.stop="togglePassword">
             {{ showPassword ? '🙈' : '👁️' }}
           </text>
         </view>
@@ -66,7 +72,8 @@
         <text v-if="loading" class="button-loading">登录中...</text>
         <text v-else>登录</text>
       </button>
-    </view>
+      </view>
+    </scroll-view>
 
     <!-- 跳转到注册页面 -->
     <view class="register-link">
@@ -77,6 +84,8 @@
 </template>
 
 <script>
+import * as api from '../../services/api'
+
 export default {
   data() {
     return {
@@ -109,19 +118,15 @@ export default {
     calculateSafeArea() {
       try {
         const systemInfo = uni.getSystemInfoSync();
-        const menuButtonInfo = wx.getMenuButtonBoundingClientRect();
+        // H5/非微信小程序环境没有 wx 对象，使用安全兜底
+        const hasWx = typeof wx !== 'undefined' && wx.getMenuButtonBoundingClientRect;
+        const menuButtonInfo = hasWx ? wx.getMenuButtonBoundingClientRect() : null;
 
-        // 状态栏高度
         const statusBarHeight = systemInfo.statusBarHeight || 0;
+        const capsuleHeight = menuButtonInfo?.height || 32;
+        const capsuleTop = menuButtonInfo?.top || statusBarHeight;
+        const topPadding = capsuleTop + capsuleHeight + 8;
 
-        // 胶囊高度和顶部间距
-        const capsuleHeight = menuButtonInfo.height || 32;
-        const capsuleTop = menuButtonInfo.top || statusBarHeight;
-
-        // 计算顶部预留边距
-        const topPadding = capsuleTop + capsuleHeight + 8; // 额外预留 8px 间距
-
-        // 设置数据
         this.statusBarHeight = statusBarHeight;
         this.capsuleHeight = capsuleHeight;
         this.topPadding = topPadding;
@@ -142,15 +147,13 @@ export default {
     
     // 验证账号
     validateUsername() {
-      if (!this.formData.username.trim()) {
-        this.errors.username = '请输入账号';
+      const name = this.formData.username.trim()
+      if (!name) {
+        this.errors.username = '请输入账号'
         return false;
       }
-      if (this.formData.username.trim().length < 3) {
-        this.errors.username = '账号长度至少3位';
-        return false;
-      }
-      this.errors.username = '';
+      // 最低限制 1 个字符，故不再限制长度
+      this.clearError('username')
       return true;
     },
     
@@ -193,28 +196,41 @@ export default {
     },
     
     // 处理登录
-    handleLogin() {
+    async handleLogin() {
       if (!this.validateForm()) {
         return;
       }
-
       this.loading = true;
-
-      // 模拟登录请求
-      setTimeout(() => {
-        this.loading = false;
+      try {
+        const res = await api.loginApi({
+          username: this.formData.username,
+          password: this.formData.password
+        });
+        // 成功：保存 token
+        api.saveToken(res.token);
+        // 优先拉取带 profile 的最新用户信息
+        try {
+          const me = await api.fetchMe();
+          uni.setStorageSync('current_user', me || res.user || {});
+        } catch (e) {
+          uni.setStorageSync('current_user', res.user || {});
+        }
         this.showSuccess = true;
-
-        // 如果选择了记住密码，保存登录信息
+        // 记住用户名
         if (this.formData.rememberMe) {
           this.saveCredentials();
+        } else {
+          uni.removeStorageSync('username');
+          uni.removeStorageSync('rememberMe');
         }
-
-        // 模拟跳转到 discover 页面
-        uni.switchTab({
-          url: '/pages/discover/discover'
-        });
-      }, 1500);
+        // 跳转首页
+        uni.switchTab({ url: '/pages/discover/discover' });
+      } catch (err) {
+        const msg = err?.data?.error || '登录失败，请检查账号密码';
+        uni.showToast({ title: msg, icon: 'none' });
+      } finally {
+        this.loading = false;
+      }
     },
     
     // 保存登录信息
@@ -320,15 +336,58 @@ export default {
 }
 
 /* 表单容器 */
-.form-container {
+:global(html),
+:global(body) {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+:global(input),
+:global(textarea) {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  pointer-events: auto !important;
+}
+
+/* 兼容 H5：uni-input 内部真实 input/placeholder 解锁交互 */
+:global(.uni-input) {
+  pointer-events: auto !important;
+}
+:global(.uni-input-wrapper) {
+  pointer-events: auto !important;
+}
+:global(.uni-input-input) {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  pointer-events: auto !important;
+  caret-color: #333;
+  background: transparent;
   width: 100%;
-  max-width: 800rpx;
-  background: rgba(255, 255, 255, 0.95);
+  height: 100%;
+  display: block;
+  line-height: inherit;
+  border: none;
+  outline: none;
+}
+:global(.uni-input-placeholder),
+:global(.input-placeholder) {
+  pointer-events: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  line-height: inherit;
+}
+
+.form-scroll {
+  width: 100%;
+  max-width: 820rpx;
+  max-height: calc(100vh - 340rpx);
+  overflow: hidden;
   border-radius: 48rpx;
   padding: 60rpx 40rpx;
   box-shadow: 0 40rpx 120rpx rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
   animation: slideUp 0.5s ease-out;
+  z-index: 1;
 }
 
 @keyframes slideUp {
@@ -346,6 +405,11 @@ export default {
 .form-group {
   margin-bottom: 40rpx;
   position: relative;
+}
+
+.input-wrapper {
+  position: relative;
+  pointer-events: auto;
 }
 
 .form-group.error .form-input {
@@ -366,14 +430,19 @@ export default {
 
 .form-input {
   width: 100%;
-  padding: 28rpx 90rpx 28rpx 30rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0 90rpx 0 30rpx;
   border: 4rpx solid #e0e0e0;
-  border-radius: 24rpx;
+  border-radius: 20rpx;
   font-size: 32rpx;
   transition: all 0.3s ease;
   background: #f8f9fa;
   color: #333;
   box-sizing: border-box;
+  pointer-events: auto;
+  position: relative;
+  z-index: 5;
 }
 
 .form-input:focus {
@@ -389,6 +458,8 @@ export default {
   transform: translateY(-50%);
   color: #999;
   font-size: 36rpx;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .toggle-password {
@@ -399,7 +470,8 @@ export default {
   color: #999;
   font-size: 36rpx;
   padding: 10rpx;
-  z-index: 10;
+  z-index: 3;
+  pointer-events: auto;
 }
 
 .error-message {

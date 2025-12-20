@@ -168,6 +168,7 @@ export default {
   },
   onLoad() {
     this.setStatusBar()
+    this.loadProfileFromStorage()
     // 监听发布事件，把自己的帖子加入列表
     this.__newMyPostHandler = (payload = {}) => {
       if (payload.myPost) {
@@ -201,6 +202,7 @@ export default {
   },
   onShow() {
     this.setStatusBar()
+    this.loadProfileFromStorage()
   },
   onUnload() {
     if (this.__newMyPostHandler) {
@@ -219,6 +221,26 @@ export default {
         this.statusBarHeight = info.statusBarHeight || 0
       } catch (e) {
         this.statusBarHeight = 0
+      }
+    },
+    loadProfileFromStorage() {
+      try {
+        const stored = uni.getStorageSync('current_user') || {}
+        const profileData = stored.profile || {}
+        const nickname = stored.username || stored.nickname || '小程序用户'
+        const signature = profileData.signature || stored.signature || '记录生活 · 分享精彩'
+        const avatar = profileData.avatar || stored.avatar || this.profile.avatar
+        this.profile.nickname = nickname
+        this.profile.signature = signature
+        this.profile.avatar = avatar
+        // 同步已有列表显示
+        this.myPosts = this.myPosts.map(p => ({
+          ...p,
+          name: nickname,
+          avatar: avatar || p.avatar
+        }))
+      } catch (e) {
+        console.warn('load profile failed', e)
       }
     },
     handlePublish() {

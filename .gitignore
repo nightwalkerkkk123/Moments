@@ -1,0 +1,27 @@
+# 后端相关
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+DjangoProject/.idea
+DjangoProject/.venv/
+DjangoProject/db.sqlite3
+DjangoProject/*/__pycache__/
+
+# 前端相关
+frontend/uni-preset-vue-vite/node_modules/
+frontend/uni-preset-vue-vite/.vite/
+frontend/uni-preset-vue-vite/dist/
+frontend/uni-preset-vue-vite/.env.local
+frontend/uni-preset-vue-vite/package-lock.json  # 如果原仓库没提交，也忽略
+
+# IDE配置
+.idea/
+.vscode/
+*.iml
+misc.xml
+workspace.xml
+
+# 其他杂项
+.DS_Store
+*.log

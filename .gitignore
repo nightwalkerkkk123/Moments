@@ -1,4 +1,12 @@
 # 后端相关
+# 忽略Python所有缓存文件/文件夹
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.so
+*.egg-info/
 
 
 # 前端相关

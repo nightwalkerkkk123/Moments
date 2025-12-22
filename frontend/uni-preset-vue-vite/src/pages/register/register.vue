@@ -148,16 +148,6 @@ export default {
         gender: '',
         age: ''
       },
-    
-    // 验证性别
-    validateGender() {
-      if (!this.formData.gender) {
-        this.errors.gender = '请选择性别'
-        return false
-      }
-      this.errors.gender = ''
-      return true
-    },
       showPassword: false,
       showConfirmPassword: false,
       loading: false,
@@ -293,6 +283,16 @@ export default {
     // 清除错误
     clearError(field) {
       this.errors[field] = ''
+    },
+    
+    // 验证性别
+    validateGender() {
+      if (!this.formData.gender) {
+        this.errors.gender = '请选择性别'
+        return false
+      }
+      this.errors.gender = ''
+      return true
     },
     setStatusBar() {
       try {

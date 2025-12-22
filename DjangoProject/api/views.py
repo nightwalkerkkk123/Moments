@@ -5,7 +5,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .serializers import UserSerializer, UserCreateSerializer
+from .serializers import (
+    UserSerializer,
+    UserCreateSerializer,
+    UserUpdateSerializer,
+    PasswordChangeSerializer,
+)
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -14,24 +19,45 @@ class UserViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """根据动作设置不同的权限"""
-        if self.action in ['list', 'retrieve', 'create', 'update', 'partial_update', 'destroy', 'me']:
-            return [IsAuthenticated()]  # 列表、详情、创建、更新、删除和获取当前用户信息需要认证
-        return [AllowAny()]  # register 允许匿名访问
+        # 仅读写敏感操作需要登录，注册/登录保持匿名
+        if self.action in ['list', 'retrieve', 'update', 'partial_update', 'destroy', 'me', 'change_password']:
+            return [IsAuthenticated()]  # 需要认证
+        # create 走注册流程，放行匿名
+        return [AllowAny()]
     
     def get_serializer_class(self):
         if self.action == 'create':
             return UserCreateSerializer
+        if self.action == 'me' and self.request and self.request.method in ['PUT', 'PATCH']:
+            return UserUpdateSerializer
+        if self.action in ['update', 'partial_update']:
+            return UserUpdateSerializer
+        if self.action == 'change_password':
+            return PasswordChangeSerializer
         return UserSerializer
     
     def create(self, request, *args, **kwargs):
         """重写创建方法，使用注册逻辑"""
         return self.register(request)
     
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get', 'put', 'patch'], permission_classes=[IsAuthenticated])
     def me(self, request):
-        """获取当前用户信息"""
+        """获取或更新当前用户信息；昵称=用户名"""
+        if request.method in ['PUT', 'PATCH']:
+            serializer = self.get_serializer(request.user, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(UserSerializer(request.user).data)
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated], url_path='me/password')
+    def change_password(self, request):
+        """修改密码"""
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'message': '密码更新成功'})
     
     @action(detail=False, methods=['post', 'get'], permission_classes=[AllowAny])
     def register(self, request):

@@ -1,13 +1,13 @@
 # 后端相关
 # 忽略Python所有缓存文件/文件夹
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.pyw
-*.so
-*.egg-info/
+DjangoProject/DjangoProject/__pycache__/
+DjangoProject/api/__pycache__/
+DjangoProject/notifications/__pycache__/
+DjangoProject/posts/__pycache__/
 
+DjangoProject/notifications/migrations/__pycache__/
+DjangoProject/posts/migrations/__pycache__/
+DjangoProject/api/migrations/__pycache__/
 
 # 前端相关
 frontend/uni-preset-vue-vite/node_modules/

@@ -1,4 +1,11 @@
 # 后端相关
+DjangoProject/notifications/__pycache__/
+DjangoProject/notifications/migrations/__pycache__/
+DjangoProject/posts/__pycache__/
+DjangoProject/posts/migrations/__pycache__/
+DjangoProject/api/__pycache__/
+DjangoProject/api/migrations/__pycache__/
+DjangoProject/DjangoProject/__pycache__/
 
 # 前端相关
 frontend/uni-preset-vue-vite/node_modules/

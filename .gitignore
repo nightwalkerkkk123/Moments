@@ -1,5 +1,6 @@
 # 后端相关
 # 忽略Python所有缓存文件/文件夹
+.idea
 DjangoProject/DjangoProject/__pycache__/
 DjangoProject/api/__pycache__/
 DjangoProject/notifications/__pycache__/

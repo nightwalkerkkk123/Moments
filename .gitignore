@@ -1,17 +1,5 @@
 # 后端相关
 **/__pycache__/
 
-# Python/虚拟环境相关
-venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.env
-.env.local
-*.sqlite3
-*.log
-
-
 # 前端相关
 frontend/uni-preset-vue-vite/node_modules/

@@ -1,125 +1,131 @@
-from rest_framework import generics
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Notification
 from .serializers import NotificationSerializer
-from posts.pagination import StandardResultsSetPagination
-from rest_framework import serializers  # 新增：导入空Serializer
 
 
-# class NotificationListView(generics.ListAPIView):
-#     """获取消息通知列表"""
-#     permission_classes = [IsAuthenticated]
-#     serializer_class = NotificationSerializer
-#     pagination_class = StandardResultsSetPagination
+# 自定义分页类（与其他应用保持一致）
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'pageSize'
+    max_page_size = 100
 
-#     def get_queryset(self):
-#         return Notification.objects.filter(user=self.request.user).order_by('-created_time')
 
-#     def list(self, request, *args, **kwargs):
-#         queryset = self.get_queryset()
-#         page = self.paginate_queryset(queryset)
-#         if page is not None:
-#             serializer = self.get_serializer(page, many=True)
-#             return self.get_paginated_response({
-#                 'success': True,
-#                 'data': {
-#                     'notifications': serializer.data,
-#                     'total': queryset.count()
-#                 }
-#             })
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_notifications(request):
+    """获取当前用户的通知列表"""
+    # 获取通知列表，按时间倒序
+    notifications = Notification.objects.filter(user=request.user).order_by('-created_at')
+    
+    # 应用分页
+    paginator = StandardResultsSetPagination()
+    paginated_notifications = paginator.paginate_queryset(notifications, request)
+    
+    # 序列化
+    serializer = NotificationSerializer(paginated_notifications, many=True, context={'request': request})
+    
+    # 统计未读通知数量
+    total_unread = notifications.filter(is_read=False).count()
+    
+    return Response({
+        'success': True,
+        'data': {
+            'notifications': serializer.data,
+            'total': notifications.count(),
+            'total_unread': total_unread  # 保持与文档一致的字段名
+        }
+    })
 
-#         serializer = self.get_serializer(queryset, many=True)
-#         return Response({
-#             'success': True,
-#             'data': {
-#                 'notifications': serializer.data,
-#                 'total': queryset.count()
-#             }
-#         })
 
-class NotificationListView(generics.ListAPIView):
-    """获取消息通知列表"""
-    permission_classes = [IsAuthenticated]
-    serializer_class = NotificationSerializer
-    pagination_class = StandardResultsSetPagination
-
-    def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user).order_by('-created_time')
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        page = self.paginate_queryset(queryset)
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def mark_notification_read(request, notification_id):
+    """标记单个通知为已读"""
+    try:
+        notification = Notification.objects.get(id=notification_id, user=request.user)
+        notification.is_read = True
+        notification.save()
         
-        # 新增：统计未读通知数量（文档备注强制要求）
-        total_unread = queryset.filter(read=False).count()
-
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            # 修改前：return self.get_paginated_response({...}) （格式不符合文档）
-            return Response({  # 修改后：按文档格式封装，去掉count/next/previous
-                'success': True,
-                'data': {
-                    'notifications': serializer.data,
-                    'total': queryset.count(),
-                    'total_unread': total_unread  # 新增未读数量字段
-                }
-            })
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({
-            'success': True,
-            'data': {
-                'notifications': serializer.data,
-                'total': queryset.count(),
-                'total_unread': total_unread  # 新增未读数量字段
-            }
-        })
-
-
-# class MarkAsReadView(generics.CreateAPIView):
-#     """标记通知为已读"""
-#     permission_classes = [IsAuthenticated]
-
-#     def create(self, request, *args, **kwargs):
-#         notification_ids = request.data.get('notificationIds', [])
-#         if notification_ids:
-#             Notification.objects.filter(
-#                 id__in=notification_ids,
-#                 user=request.user
-#             ).update(read=True)
-#         else:
-#             # 为空时标记全部
-#             Notification.objects.filter(user=request.user).update(read=True)
-
-#         return Response({
-#             'success': True,
-#             'message': '操作成功'
-#         })
-
-class MarkAsReadView(generics.CreateAPIView):
-    """标记通知为已读（支持单条/全部，文档要求）"""
-    permission_classes = [IsAuthenticated]
-    # 新增：按DRF规范补充空Serializer（避免潜在警告，不影响功能）
-    serializer_class = serializers.Serializer
-
-    def create(self, request, *args, **kwargs):
-        notification_ids = request.data.get('notificationIds', [])
-        user = request.user
-
-        if notification_ids:
-            # 标记指定ID的通知为已读（仅更新未读的）
-            Notification.objects.filter(
-                id__in=notification_ids,
-                user=user,
-                read=False  # 优化：只更新未读的，避免重复操作
-            ).update(read=True)
-        else:
-            # 标记全部已读（仅更新未读的，效率更高）
-            Notification.objects.filter(user=user, read=False).update(read=True)
-
-        # 响应格式已符合文档，无需修改
         return Response({
             'success': True,
             'message': '操作成功'
         })
+    except Notification.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': '通知不存在或无权操作'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def mark_all_notifications_read(request):
+    """标记所有通知为已读"""
+    # 更新当前用户的所有未读通知
+    Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+    
+    return Response({
+        'success': True,
+        'message': '操作成功'
+    })
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_notification(request, notification_id):
+    """删除单个通知"""
+    try:
+        notification = Notification.objects.get(id=notification_id, user=request.user)
+        notification.delete()
+        
+        return Response({
+            'success': True,
+            'message': '操作成功'
+        })
+    except Notification.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': '通知不存在或无权操作'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_all_notifications(request):
+    """删除所有通知"""
+    # 删除当前用户的所有通知
+    Notification.objects.filter(user=request.user).delete()
+    
+    return Response({
+        'success': True,
+        'message': '操作成功'
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def mark_as_read(request):
+    """标记通知为已读（支持单条/全部，文档要求的旧接口）"""
+    notification_ids = request.data.get('notificationIds', [])
+    user = request.user
+
+    if notification_ids:
+        # 标记指定ID的通知为已读（仅更新未读的）
+        Notification.objects.filter(
+            id__in=notification_ids,
+            user=user,
+            is_read=False  # 优化：只更新未读的，避免重复操作
+        ).update(is_read=True)
+    else:
+        # 标记全部已读（仅更新未读的，效率更高）
+        Notification.objects.filter(user=user, is_read=False).update(is_read=True)
+
+    # 响应格式已符合文档
+    return Response({
+        'success': True,
+        'message': '操作成功'
+    })

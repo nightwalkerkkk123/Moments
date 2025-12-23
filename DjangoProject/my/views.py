@@ -1,111 +1,79 @@
 from rest_framework import viewsets, status, pagination
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.authtoken.models import Token
-from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
-from .serializers import UserSerializer, UserCreateSerializer, PostSerializer, CommentSerializer, CreateCommentSerializer
-from .models import Post, Like, Comment
+from rest_framework.permissions import IsAuthenticated
+from api.models import Post, Like, Comment
+from my.serializers import PostSerializer, CommentSerializer, CreateCommentSerializer
 
-class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [AllowAny]  # 默认允许匿名访问
-    
-    def get_permissions(self):
-        """根据动作设置不同的权限"""
-        if self.action in ['list', 'retrieve', 'create', 'update', 'partial_update', 'destroy', 'me']:
-            return [IsAuthenticated()]  # 列表、详情、创建、更新、删除和获取当前用户信息需要认证
-        return [AllowAny()]  # register 允许匿名访问
-    
-    def get_serializer_class(self):
-        if self.action == 'create':
-            return UserCreateSerializer
-        return UserSerializer
-    
-    def create(self, request, *args, **kwargs):
-        """重写创建方法，使用注册逻辑"""
-        return self.register(request)
-    
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
-    def me(self, request):
-        """获取当前用户信息"""
-        serializer = self.get_serializer(request.user)
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['post', 'get'], permission_classes=[AllowAny])
-    def register(self, request):
-        """用户注册"""
-        if request.method == 'GET':
-            return Response({
-                'message': 'This is the user registration endpoint.',
-                'method': 'POST',
-                'required_fields': ['username', 'password'],
-                'optional_fields': ['email', 'first_name', 'last_name'],
-                'example': {
-                    'username': 'newuser',
-                    'password': 'securepassword',
-                    'email': 'user@example.com'
-                }
-            })
-        
-        serializer = UserCreateSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            return Response({
-                'message': 'User created successfully',
-                'user': UserSerializer(user).data
-            }, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def login_view(request):
-    """用户登录接口"""
-    username = request.data.get('username')
-    password = request.data.get('password')
-    
-    if not username or not password:
-        return Response({
-            'error': 'Please provide both username and password'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    user = authenticate(username=username, password=password)
-    
-    if user is not None:
-        # 获取或创建 token
-        token, created = Token.objects.get_or_create(user=user)
-        return Response({
-            'message': 'Login successful',
-            'token': token.key,
-            'user': UserSerializer(user).data
-        })
-    else:
-        return Response({
-            'error': 'Invalid credentials'
-        }, status=status.HTTP_401_UNAUTHORIZED)
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def logout_view(request):
-    """用户登出接口"""
-    try:
-        # 删除用户的 token
-        Token.objects.filter(user=request.user).delete()
-        return Response({
-            'message': 'Logout successful'
-        })
-    except Token.DoesNotExist:
-        return Response({
-            'message': 'No active session found'
-        }, status=status.HTTP_400_BAD_REQUEST)
 
 # 自定义分页类
 class StandardResultsSetPagination(pagination.PageNumberPagination):
     page_size = 10
     page_size_query_param = 'pageSize'
     max_page_size = 100
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_my_posts(request):
+    """获取我的动态列表接口"""
+    page = request.query_params.get('page', 1)
+    page_size = request.query_params.get('pageSize', 10)
+    
+    # 按时间倒序获取当前用户的动态
+    posts = Post.objects.filter(user=request.user).order_by('-created_at')
+    
+    # 分页
+    paginator = StandardResultsSetPagination()
+    paginator.page_size = page_size
+    result_page = paginator.paginate_queryset(posts, request)
+    
+    # 序列化
+    serializer = PostSerializer(result_page, many=True, context={'request': request})
+    
+    return paginator.get_paginated_response({
+        'success': True,
+        'data': {
+            'posts': serializer.data,
+            'total': posts.count()
+        }
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_my_stats(request):
+    """获取我的统计信息接口"""
+    # 统计当前用户的动态数量
+    posts_count = Post.objects.filter(user=request.user).count()
+    
+    return Response({
+        'success': True,
+        'data': {
+            'posts': posts_count
+        }
+    })
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_my_post(request, post_id):
+    """删除我的动态接口"""
+    try:
+        # 确保只能删除自己的动态
+        post = Post.objects.get(id=post_id, user=request.user)
+        post.delete()
+        
+        return Response({
+            'success': True,
+            'message': '删除成功'
+        })
+    except Post.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': '动态不存在或无权删除'
+        }, status=status.HTTP_404_NOT_FOUND)
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -150,6 +118,7 @@ def toggle_like(request, post_id):
             'success': False,
             'message': '动态不存在'
         }, status=status.HTTP_404_NOT_FOUND)
+
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])

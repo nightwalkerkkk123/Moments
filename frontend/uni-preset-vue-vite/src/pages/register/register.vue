@@ -48,9 +48,9 @@
           </view>
           <view class="password-strength" v-if="formData.password.length > 0">
             <view class="strength-bar">
-              <view class="strength-fill" :class="passwordStrengthClass"></view>
+              <view class="strength-fill" :class="passwordStrengthData.class"></view>
             </view>
-            <text class="strength-text">密码强度：{{ passwordStrengthText }}</text>
+            <text class="strength-text">密码强度：{{ passwordStrengthData.text || '弱' }}</text>
           </view>
           <text class="error-message" v-if="errors.password">{{ errors.password }}</text>
         </view>
@@ -129,6 +129,7 @@
 </template>
 
 <script>
+import { registerApi } from '../../services/api';
 export default {
   data() {
     return {
@@ -146,6 +147,11 @@ export default {
       showConfirmPassword: false,
       loading: false,
       showSuccess: false,
+      passwordStrengthData: {
+        strength: 0,
+        text: '',
+        class: 'weak'
+      },
       errors: {
         nickname: '',
         password: '',
@@ -164,31 +170,6 @@ export default {
     this.setStatusBar();
   },
   computed: {
-    passwordStrength() {
-      const password = this.formData.password
-      if (password.length === 0) return 0
-      
-      let strength = 0
-      if (password.length >= 6) strength++
-      if (password.length >= 10) strength++
-      if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++
-      if (/\d/.test(password)) strength++
-      if (/[^a-zA-Z0-9]/.test(password)) strength++
-      
-      return strength
-    },
-    passwordStrengthClass() {
-      const strength = this.passwordStrength
-      if (strength <= 2) return 'weak'
-      if (strength <= 3) return 'medium'
-      return 'strong'
-    },
-    passwordStrengthText() {
-      const strength = this.passwordStrength
-      if (strength <= 2) return '弱'
-      if (strength <= 3) return '中'
-      return '强'
-    }
   },
   methods: {
     // 新增：清除单个字段错误提示（原代码缺失，补充后表单输入时能正确清除错误）
@@ -212,16 +193,47 @@ export default {
     },
     
     // 密码输入
-    onPasswordInput() {
+    async onPasswordInput() {
       this.clearError('password')
       // 如果确认密码已输入，重新验证
       if (this.formData.confirmPassword) {
         this.validateConfirmPassword()
       }
+      
+      // 调用API验证密码强度
+      if (this.formData.password) {
+        try {
+          const response = await registerApi.validatePasswordStrength({
+            password: this.formData.password
+          })
+          
+          // 更新密码强度信息
+          this.passwordStrengthData = {
+            strength: response.data.strength,
+            text: response.data.text,
+            class: response.data.class
+          }
+        } catch (error) {
+          console.error('密码强度验证失败', error)
+          // 失败时使用默认值
+          this.passwordStrengthData = {
+            strength: 0,
+            text: '弱',
+            class: 'weak'
+          }
+        }
+      } else {
+        // 密码为空时重置
+        this.passwordStrengthData = {
+          strength: 0,
+          text: '',
+          class: 'weak'
+        }
+      }
     },
     
     // 验证昵称
-    validateNickname() {
+    async validateNickname() {
       const nickname = this.formData.nickname.trim()
       if (!nickname) {
         this.errors.nickname = '请输入昵称'
@@ -231,8 +243,16 @@ export default {
         this.errors.nickname = '昵称长度应为2-20个字符'
         return false
       }
-      this.errors.nickname = ''
-      return true
+      
+      try {
+        // 调用API检查昵称是否重复
+        await registerApi.checkNickname(nickname)
+        this.errors.nickname = ''
+        return true
+      } catch (error) {
+        this.errors.nickname = error.message || '昵称已被使用'
+        return false
+      }
     },
     
     // 验证密码
@@ -322,8 +342,8 @@ export default {
     },
     
     // 表单验证
-    validateForm() {
-      const nicknameValid = this.validateNickname()
+    async validateForm() {
+      const nicknameValid = await this.validateNickname()
       const passwordValid = this.validatePassword()
       const confirmPasswordValid = this.validateConfirmPassword()
       const ageValid = this.validateAge()
@@ -340,19 +360,30 @@ export default {
     },
     
     // 处理注册
-    handleRegister() {
-      if (!this.validateForm()) {
+    async handleRegister() {
+      if (!(await this.validateForm())) {
         return;
       }
 
       this.loading = true;
 
-      // 模拟注册请求
-      setTimeout(() => {
+      try {
+        // 调用API进行注册
+        const response = await registerApi.register({
+          nickname: this.formData.nickname,
+          password: this.formData.password,
+          gender: this.formData.gender,
+          age: parseInt(this.formData.age)
+        });
+        
         this.loading = false;
         this.showSuccess = true;
+        
+        // 保存用户信息和token
+        uni.setStorageSync('token', response.data.token);
+        uni.setStorageSync('userInfo', response.data.userInfo);
 
-        // 模拟跳转到 discover 页面（switchTab 用于 tabBar 页面）
+        // 跳转到 discover 页面（switchTab 用于 tabBar 页面）
         uni.switchTab({
           url: '/pages/discover/discover',
           fail: (err) => {
@@ -361,7 +392,14 @@ export default {
             console.warn('switchTab 失败，已改用 navigateTo', err);
           }
         });
-      }, 1500);
+      } catch (error) {
+        this.loading = false;
+        uni.showToast({
+          title: error.message || '注册失败',
+          icon: 'none',
+          duration: 2000
+        });
+      }
     },
     
     // 跳转到登录页面

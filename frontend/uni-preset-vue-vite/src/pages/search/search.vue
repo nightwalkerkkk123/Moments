@@ -21,9 +21,20 @@
 
     <!-- 搜索建议（输入时显示） -->
     <view class="search-suggestions" v-if="showSuggestions && searchForm.keyword && !hasSearched">
-      <view class="suggestion-item" v-for="(item, index) in suggestions" :key="index" @tap="selectSuggestion(item)">
-        <text class="suggestion-icon">🔍</text>
-        <text class="suggestion-text">{{ item }}</text>
+      <!-- 搜索建议加载状态 -->
+      <view class="loading-container" v-if="loadingSuggestions">
+        <text class="loading-text">加载中...</text>
+      </view>
+      <!-- 搜索建议列表 -->
+      <view v-else-if="suggestions.length > 0">
+        <view class="suggestion-item" v-for="(item, index) in suggestions" :key="index" @tap="selectSuggestion(item)">
+          <text class="suggestion-icon">🔍</text>
+          <text class="suggestion-text">{{ item }}</text>
+        </view>
+      </view>
+      <!-- 无建议提示 -->
+      <view class="no-suggestions" v-else>
+        <text class="no-suggestions-text">暂无搜索建议</text>
       </view>
     </view>
 
@@ -79,23 +90,30 @@
     </view>
 
     <!-- 搜索历史 -->
-    <view class="history-card" v-if="!hasSearched && searchHistory.length > 0">
-      <view class="card-header">
-        <text class="card-title">搜索历史</text>
-        <text class="clear-history-btn" @tap="clearHistory">清除全部</text>
+    <view class="history-card" v-if="!hasSearched">
+      <!-- 历史记录加载状态 -->
+      <view v-if="loadingHistory" class="loading-container">
+        <text class="loading-text">加载中...</text>
       </view>
-      <view class="history-list">
-        <view
-          class="history-item"
-          v-for="(item, index) in searchHistory"
-          :key="index"
-          @tap="useHistoryItem(item)"
-        >
-          <view class="history-content">
-            <text class="history-icon">🕐</text>
-            <text class="history-text">{{ formatHistoryText(item) }}</text>
+      <!-- 历史记录列表 -->
+      <view v-else-if="searchHistory.length > 0">
+        <view class="card-header">
+          <text class="card-title">搜索历史</text>
+          <text class="clear-history-btn" @tap="clearHistory">清除全部</text>
+        </view>
+        <view class="history-list">
+          <view
+            class="history-item"
+            v-for="(item, index) in searchHistory"
+            :key="index"
+            @tap="useHistoryItem(item)"
+          >
+            <view class="history-content">
+              <text class="history-icon">🕐</text>
+              <text class="history-text">{{ formatHistoryText(item) }}</text>
+            </view>
+            <text class="history-delete" @tap.stop="deleteHistoryItem(index)">✕</text>
           </view>
-          <text class="history-delete" @tap.stop="deleteHistoryItem(index)">✕</text>
         </view>
       </view>
     </view>
@@ -106,7 +124,7 @@
         <text class="card-title">热门标签</text>
         <text class="card-subtitle">点击快速搜索</text>
       </view>
-      <view class="hot-tags">
+      <view class="hot-tags" v-if="!loadingHotTags">
         <view
           class="hot-tag"
           v-for="(tag, index) in hotTags"
@@ -118,91 +136,120 @@
           <text>{{ tag }}</text>
         </view>
       </view>
+      <view class="loading-container" v-if="loadingHotTags">
+        <text class="loading-text">加载中...</text>
+      </view>
     </view>
 
     <!-- 搜索结果 -->
-    <scroll-view class="results-container" scroll-y v-if="hasSearched">
-      <view class="results-header">
-        <view class="results-info">
-          <text class="results-count">找到 <text class="count-number">{{ searchResults.length }}</text> 条结果</text>
-          <text class="results-tip" v-if="searchForm.keyword">关键词: "{{ searchForm.keyword }}"</text>
+    <scroll-view class="results-container" scroll-y v-if="hasSearched" @scrolltolower="loadMore">
+      <!-- 加载状态 -->
+      <view class="loading-state" v-if="loadingSearch">
+        <view class="loading-icon-wrapper">
+          <text class="loading-icon">🔍</text>
         </view>
-        <text class="clear-results-btn" @tap="clearResults">
-          <text class="btn-icon">↻</text>
-          <text>重新搜索</text>
-        </text>
+        <text class="loading-text">搜索中...</text>
       </view>
-
-      <!-- 空结果 -->
-      <view v-if="searchResults.length === 0" class="empty-state">
-        <view class="empty-icon-wrapper">
-          <text class="empty-icon">🔍</text>
+      
+      <!-- 搜索结果内容 -->
+      <template v-else>
+        <view class="results-header">
+          <view class="results-info">
+            <text class="results-count">找到 <text class="count-number">{{ searchResults.length }}</text> 条结果</text>
+            <text class="results-tip" v-if="searchForm.keyword">关键词: "{{ searchForm.keyword }}"</text>
+          </view>
+          <text class="clear-results-btn" @tap="clearResults">
+            <text class="btn-icon">↻</text>
+            <text>重新搜索</text>
+          </text>
         </view>
-        <text class="empty-title">未找到相关内容</text>
-        <text class="empty-desc">试试调整搜索条件或使用其他关键词</text>
-        <button class="empty-action-btn" @tap="resetFilters">重新搜索</button>
-      </view>
 
-      <!-- 结果列表 -->
-      <view class="results-list">
-        <view 
-          class="post-card" 
-          v-for="(item, index) in searchResults" 
-          :key="item.id"
-          :style="{ animationDelay: index * 0.05 + 's' }"
-        >
-          <view class="post-header">
-            <image class="avatar" :src="item.avatar" mode="aspectFill" />
-            <view class="meta">
-              <text class="name">{{ item.name }}</text>
-              <text class="time">{{ item.time }}</text>
+        <!-- 空结果 -->
+        <view v-if="searchResults.length === 0" class="empty-state">
+          <view class="empty-icon-wrapper">
+            <text class="empty-icon">🔍</text>
+          </view>
+          <text class="empty-title">未找到相关内容</text>
+          <text class="empty-desc">试试调整搜索条件或使用其他关键词</text>
+          <button class="empty-action-btn" @tap="resetFilters">重新搜索</button>
+        </view>
+
+        <!-- 结果列表 -->
+        <view class="results-list">
+          <view 
+            class="post-card" 
+            v-for="(item, index) in searchResults" 
+            :key="item.id"
+            :style="{ animationDelay: index * 0.05 + 's' }"
+          >
+            <view class="post-header">
+              <image class="avatar" :src="item.avatar" mode="aspectFill" />
+              <view class="meta">
+                <text class="name">{{ item.name }}</text>
+                <text class="time">{{ item.time }}</text>
+              </view>
+              <text class="tag-badge" v-if="item.tag">{{ item.tag }}</text>
             </view>
-            <text class="tag-badge" v-if="item.tag">{{ item.tag }}</text>
-          </view>
 
-          <view class="text-content" v-if="item.text">
-            <rich-text :nodes="highlightKeyword(item.text)"></rich-text>
-          </view>
-
-          <view class="media-grid" v-if="item.type === 'image' && item.media">
-            <image
-              v-for="(img, idx) in item.media"
-              :key="idx"
-              class="media-img"
-              :src="img"
-              mode="aspectFill"
-              @tap="previewImage(item.media, idx)"
-            />
-          </view>
-
-          <view class="media-video" v-if="item.type === 'video'">
-            <video
-              :src="item.media"
-              :poster="item.poster"
-              controls
-              autoplay="false"
-              show-center-play-btn
-              object-fit="cover"
-            />
-          </view>
-
-          <view class="actions-row">
-            <view class="action-btn" @tap="toggleLike(item)">
-              <text class="action-icon">{{ item.liked ? '❤️' : '🤍' }}</text>
-              <text class="action-count">{{ item.likes }}</text>
+            <view class="text-content" v-if="item.text">
+              <rich-text :nodes="highlightKeyword(item.text)"></rich-text>
             </view>
-            <view class="action-btn" @tap="handleComment(item)">
-              <text class="action-icon">💬</text>
-              <text class="action-count">{{ item.comments }}</text>
+
+            <view class="media-grid" v-if="item.type === 'image' && item.media">
+              <image
+                v-for="(img, idx) in item.media"
+                :key="idx"
+                class="media-img"
+                :src="img"
+                mode="aspectFill"
+                @tap="previewImage(item.media, idx)"
+              />
+            </view>
+
+            <view class="media-video" v-if="item.type === 'video'">
+              <video
+                :src="item.media"
+                :poster="item.poster"
+                controls
+                autoplay="false"
+                show-center-play-btn
+                object-fit="cover"
+              />
+            </view>
+
+            <view class="actions-row">
+              <view class="action-btn" @tap="toggleLike(item)">
+                <text class="action-icon">{{ item.liked ? '❤️' : '🤍' }}</text>
+                <text class="action-count">{{ item.likes }}</text>
+              </view>
+              <view class="action-btn" @tap="handleComment(item)">
+                <text class="action-icon">💬</text>
+                <text class="action-count">{{ item.comments }}</text>
+              </view>
             </view>
           </view>
         </view>
-      </view>
+        
+        <!-- 加载更多 -->
+        <view class="load-more-container">
+          <view v-if="hasMore && !loadingMore" class="load-more-tip">
+            <text class="load-more-text">上拉加载更多</text>
+          </view>
+          <view v-if="loadingMore" class="load-more-loading">
+            <text class="loading-icon">🔄</text>
+            <text class="loading-text">加载中...</text>
+          </view>
+          <view v-if="!hasMore" class="no-more-tip">
+            <text class="no-more-text">没有更多内容了</text>
+          </view>
+        </view>
+      </template>
     </scroll-view>
   </view>
 </template>
 
 <script>
+import { searchApi } from '@/services/api.js';
 export default {
   data() {
     return {
@@ -219,15 +266,25 @@ export default {
       searchResults: [],
       searchHistory: [],
       availableTags: ['户外', '日常', '美食', '旅行', '摄影', '运动', '学习', '工作'],
-      hotTags: ['户外', '美食', '旅行', '摄影', '运动', '学习'],
+      hotTags: [],
       allPosts: [],
-      suggestions: []
+      suggestions: [],
+      // 加载状态
+      loadingHotTags: false,
+      loadingSuggestions: false,
+      loadingSearch: false,
+      loadingHistory: false,
+      loadingMore: false,
+      // 分页
+      currentPage: 1,
+      pageSize: 10,
+      hasMore: true
     };
   },
   onLoad() {
     this.calculateSafeArea();
     this.setStatusBar();
-    this.loadAllPosts();
+    this.loadHotTags();
     this.loadSearchHistory();
   },
   onShow() {
@@ -263,6 +320,26 @@ export default {
         this.statusBarHeight = info.statusBarHeight || 0;
       } catch (e) {
         this.statusBarHeight = 0;
+      }
+    },
+    // 加载热门标签
+    async loadHotTags() {
+      try {
+        this.loadingHotTags = true;
+        const response = await searchApi.getHotTags();
+        if (response.success && response.data) {
+          this.hotTags = response.data;
+        }
+      } catch (error) {
+        console.error('加载热门标签失败:', error);
+        uni.showToast({
+          title: '加载热门标签失败',
+          icon: 'none'
+        });
+        // 使用默认热门标签作为后备
+        this.hotTags = ['户外', '美食', '旅行', '摄影', '运动', '学习'];
+      } finally {
+        this.loadingHotTags = false;
       }
     },
     loadAllPosts() {
@@ -343,11 +420,11 @@ export default {
         }
       ]
     },
-    onKeywordInput(e) {
+    async onKeywordInput(e) {
       const keyword = e.detail.value
       if (keyword.length > 0) {
         this.showSuggestions = true
-        this.generateSuggestions(keyword)
+        await this.getSuggestions(keyword)
       } else {
         this.showSuggestions = false
       }
@@ -357,15 +434,21 @@ export default {
         this.showSuggestions = true
       }
     },
-    generateSuggestions(keyword) {
-      // 生成搜索建议
-      const keywordLower = keyword.toLowerCase()
-      const userNames = [...new Set(this.allPosts.map(p => p.name))]
-      const suggestions = userNames
-        .filter(name => name.toLowerCase().includes(keywordLower))
-        .slice(0, 5)
-        .map(name => name)
-      this.suggestions = suggestions
+    async getSuggestions(keyword) {
+      try {
+        this.loadingSuggestions = true;
+        const response = await searchApi.getSuggestions(keyword);
+        if (response.success && response.data) {
+          this.suggestions = response.data;
+        } else {
+          this.suggestions = [];
+        }
+      } catch (error) {
+        console.error('获取搜索建议失败:', error);
+        this.suggestions = [];
+      } finally {
+        this.loadingSuggestions = false;
+      }
     },
     selectSuggestion(suggestion) {
       this.searchForm.keyword = suggestion
@@ -399,7 +482,7 @@ export default {
       this.searchResults = []
       this.showSuggestions = false
     },
-    performSearch() {
+    async performSearch() {
       const { keyword, tag, date } = this.searchForm
       
       if (!keyword.trim() && !tag && !date) {
@@ -409,57 +492,106 @@ export default {
 
       this.showSuggestions = false
       
+      // 重置分页状态
+      this.currentPage = 1
+      this.hasMore = true
+      this.searchResults = []
+      
       // 显示加载状态
-      uni.showLoading({ title: '搜索中...' })
+      this.loadingSearch = true
 
-      // 模拟搜索延迟
-      setTimeout(() => {
-        let results = [...this.allPosts]
+      try {
+        // 构建搜索参数
+        const searchParams = {
+          query: keyword.trim(),
+          type: 'posts', // 搜索类型，这里固定为 posts
+          page: this.currentPage,
+          pageSize: this.pageSize
+        }
 
-        if (keyword.trim()) {
-          const keywordLower = keyword.toLowerCase()
-          results = results.filter(post => {
-            return (
-              post.name.toLowerCase().includes(keywordLower) ||
-              (post.text && post.text.toLowerCase().includes(keywordLower))
-            )
+        const response = await searchApi.search(searchParams)
+        if (response.success && response.data) {
+          this.searchResults = response.data
+          this.hasSearched = true
+          
+          // 判断是否有更多数据
+          this.hasMore = response.data.length >= this.pageSize
+
+          // 保存搜索历史
+          this.saveSearchHistory({
+            keyword: keyword.trim(),
+            tag,
+            date
+          })
+
+          uni.showToast({ 
+            title: `找到 ${response.data.length} 条结果`, 
+            icon: 'none',
+            duration: 1500
+          })
+        } else {
+          this.searchResults = []
+          this.hasSearched = true
+          this.hasMore = false
+          uni.showToast({ 
+            title: '未找到相关内容', 
+            icon: 'none',
+            duration: 1500
           })
         }
-
-        if (tag) {
-          results = results.filter(post => post.tag === tag)
-        }
-
-        if (date) {
-          // 日期搜索（简化处理，实际应该根据动态的真实发布时间进行筛选）
-          // 这里可以根据 date 字段进行筛选
-          // results = results.filter(post => {
-          //   const postDate = post.createdAt // 假设有 createdAt 字段
-          //   return postDate && postDate.startsWith(date)
-          // })
-        }
-
-        this.searchResults = results
+      } catch (error) {
+        console.error('搜索失败:', error)
+        this.searchResults = []
         this.hasSearched = true
-
-        this.saveSearchHistory({
-          keyword: keyword.trim(),
-          tag,
-          date
-        })
-
-        uni.hideLoading()
+        this.hasMore = false
         uni.showToast({ 
-          title: `找到 ${results.length} 条结果`, 
+          title: '搜索失败，请重试', 
           icon: 'none',
           duration: 1500
         })
-      }, 500)
+      } finally {
+        this.loadingSearch = false
+      }
     },
     clearResults() {
       this.hasSearched = false
       this.searchResults = []
       this.showSuggestions = false
+    },
+    async loadMore() {
+      if (this.loadingMore || !this.hasMore || !this.searchResults.length) return;
+      
+      try {
+        this.loadingMore = true;
+        this.currentPage++;
+        
+        const searchParams = {
+          query: this.searchForm.keyword.trim(),
+          type: 'posts',
+          page: this.currentPage,
+          pageSize: this.pageSize
+        }
+        
+        const response = await searchApi.search(searchParams);
+        if (response.success && response.data && response.data.length > 0) {
+          this.searchResults = [...this.searchResults, ...response.data];
+          // 如果返回的数据少于请求的pageSize，说明没有更多数据了
+          if (response.data.length < this.pageSize) {
+            this.hasMore = false;
+          }
+        } else {
+          this.hasMore = false;
+        }
+      } catch (error) {
+        console.error('加载更多失败:', error);
+        this.currentPage--;
+        uni.showToast({ 
+          title: '加载更多失败，请重试', 
+          icon: 'none'
+        });
+      } finally {
+        this.loadingMore = false;
+      }
     },
     highlightKeyword(text) {
       if (!this.searchForm.keyword || !text) return text
@@ -521,46 +653,58 @@ export default {
       this.performSearch()
     },
     deleteHistoryItem(index) {
+      // 由于后端没有提供单个删除接口，这里只更新本地状态
       this.searchHistory.splice(index, 1)
-      this.saveSearchHistoryToStorage()
     },
-    clearHistory() {
-      this.searchHistory = []
-      this.saveSearchHistoryToStorage()
-      uni.showToast({ title: '已清除搜索历史', icon: 'success' })
-    },
-    saveSearchHistory(searchItem) {
-      const exists = this.searchHistory.some(item => 
-        item.keyword === searchItem.keyword &&
-        item.tag === searchItem.tag &&
-        item.date === searchItem.date
-      )
-      
-      if (!exists) {
-        this.searchHistory.unshift(searchItem)
-        if (this.searchHistory.length > 10) {
-          this.searchHistory = this.searchHistory.slice(0, 10)
-        }
-        this.saveSearchHistoryToStorage()
-      }
-    },
-    saveSearchHistoryToStorage() {
+    async clearHistory() {
       try {
-        uni.setStorageSync('searchHistory', this.searchHistory)
-      } catch (e) {
-        console.error('保存搜索历史失败', e)
+        await searchApi.clearHistory();
+        this.searchHistory = [];
+        uni.showToast({ title: '已清除搜索历史', icon: 'success' });
+      } catch (error) {
+        console.error('清除搜索历史失败:', error);
+        uni.showToast({ title: '清除搜索历史失败，请重试', icon: 'none' });
       }
     },
-    loadSearchHistory() {
+    async saveSearchHistory(searchItem) {
       try {
-        const history = uni.getStorageSync('searchHistory')
-        if (history && Array.isArray(history)) {
-          this.searchHistory = history
+        // 先检查是否已存在相同的搜索历史
+        const exists = this.searchHistory.some(item => 
+          item.keyword === searchItem.keyword &&
+          item.tag === searchItem.tag &&
+          item.date === searchItem.date
+        )
+        
+        if (!exists) {
+          // 调用后端接口保存搜索历史
+          await searchApi.saveHistory(searchItem);
+          // 更新本地搜索历史列表
+          this.searchHistory.unshift(searchItem);
+          if (this.searchHistory.length > 10) {
+            this.searchHistory = this.searchHistory.slice(0, 10);
+          }
         }
-      } catch (e) {
-        console.error('加载搜索历史失败', e)
+      } catch (error) {
+        console.error('保存搜索历史失败:', error);
+        // 保存失败不影响用户体验，不显示错误提示
       }
-    }
+    },
+    async loadSearchHistory() {
+      try {
+        this.loadingHistory = true;
+        const response = await searchApi.getHistory();
+        if (response.success && response.data) {
+          this.searchHistory = response.data;
+        } else {
+          this.searchHistory = [];
+        }
+      } catch (error) {
+        console.error('加载搜索历史失败:', error);
+        this.searchHistory = [];
+      } finally {
+        this.loadingHistory = false;
+      }
+    },
   }
 }
 </script>

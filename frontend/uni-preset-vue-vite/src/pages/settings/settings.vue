@@ -9,6 +9,14 @@
       </view>
     </view>
 
+    <!-- 加载状态 -->
+    <view class="loading-mask" v-if="loading">
+      <view class="loading-content">
+        <text class="loading-icon">⏳</text>
+        <text class="loading-text">加载中...</text>
+      </view>
+    </view>
+
     <scroll-view scroll-y class="settings-scroll">
       <view class="settings-section">
         <view class="settings-item" @tap="handleAccountSettings">
@@ -123,12 +131,42 @@ export default {
         oldPassword: '',
         newPassword: '',
         confirmPassword: ''
-      }
+      },
+      loading: false
     }
+  },
+  onLoad() {
+    this.getUserProfile()
   },
   methods: {
     handleBack() {
       uni.navigateBack()
+    },
+    async getUserProfile() {
+      try {
+        this.loading = true
+        const response = await uni.request({
+          url: '/api/user/profile',
+          method: 'GET',
+          header: {
+            'Authorization': `Bearer ${uni.getStorageSync('token')}`
+          }
+        })
+        
+        if (response[1].statusCode === 200 && response[1].data.success) {
+          const userData = response[1].data.data
+          this.accountForm.avatar = userData.avatar
+          this.accountForm.nickname = userData.nickname
+          this.accountForm.signature = userData.signature
+        } else {
+          uni.showToast({ title: response[1].data.message || '获取用户信息失败', icon: 'none' })
+        }
+      } catch (error) {
+        console.error('获取用户信息失败:', error)
+        uni.showToast({ title: '获取用户信息失败', icon: 'none' })
+      } finally {
+        this.loading = false
+      }
     },
     handleAccountSettings() {
       this.showAccountModal = true
@@ -142,36 +180,120 @@ export default {
         sizeType: ['compressed'],
         sourceType: ['album', 'camera'],
         success: (res) => {
-          this.accountForm.avatar = res.tempFilePaths[0]
-          uni.showToast({ title: '头像已更新', icon: 'success' })
-          this.emitProfileUpdate()
+          const filePath = res.tempFilePaths[0]
+          // 将图片转换为base64编码
+          uni.getFileSystemManager().readFile({
+            filePath: filePath,
+            encoding: 'base64',
+            success: async (fileData) => {
+              try {
+                this.loading = true
+                const base64Image = `data:image/jpeg;base64,${fileData.data}`
+                const response = await uni.request({
+                  url: '/api/user/avatar',
+                  method: 'POST',
+                  data: {
+                    avatar: base64Image
+                  },
+                  header: {
+                    'Authorization': `Bearer ${uni.getStorageSync('token')}`,
+                    'Content-Type': 'application/json'
+                  }
+                })
+                
+                if (response[1].statusCode === 200 && response[1].data.success) {
+                  this.accountForm.avatar = response[1].data.data.avatar
+                  uni.showToast({ title: '头像已更新', icon: 'success' })
+                  this.emitProfileUpdate()
+                } else {
+                  uni.showToast({ title: response[1].data.message || '头像更新失败', icon: 'none' })
+                }
+              } catch (error) {
+                console.error('头像更新失败:', error)
+                uni.showToast({ title: '头像更新失败', icon: 'none' })
+              } finally {
+                this.loading = false
+              }
+            },
+            fail: () => {
+              uni.showToast({ title: '图片处理失败', icon: 'none' })
+            }
+          })
         },
         fail: () => {
           uni.showToast({ title: '选择失败', icon: 'none' })
         }
       })
     },
-    saveNickname() {
+    async saveNickname() {
       const name = this.accountForm.nickname.trim()
       if (name.length < 2 || name.length > 20) {
         uni.showToast({ title: '昵称需2-20个字符', icon: 'none' })
         return
       }
-      uni.showToast({ title: '昵称已保存', icon: 'success' })
-      // TODO: 调用接口保存昵称
-      this.emitProfileUpdate()
+      
+      try {
+        this.loading = true
+        const response = await uni.request({
+          url: '/api/user/nickname',
+          method: 'POST',
+          data: {
+            nickname: name
+          },
+          header: {
+            'Authorization': `Bearer ${uni.getStorageSync('token')}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (response[1].statusCode === 200 && response[1].data.success) {
+          uni.showToast({ title: '昵称已保存', icon: 'success' })
+          this.emitProfileUpdate()
+        } else {
+          uni.showToast({ title: response[1].data.message || '昵称保存失败', icon: 'none' })
+        }
+      } catch (error) {
+        console.error('昵称保存失败:', error)
+        uni.showToast({ title: '昵称保存失败', icon: 'none' })
+      } finally {
+        this.loading = false
+      }
     },
-    saveSignature() {
+    async saveSignature() {
       const sig = this.accountForm.signature.trim()
       if (sig.length > 60) {
         uni.showToast({ title: '签名不能超过60个字符', icon: 'none' })
         return
       }
-      uni.showToast({ title: '签名已保存', icon: 'success' })
-      // TODO: 调用接口保存签名
-      this.emitProfileUpdate()
+      
+      try {
+        this.loading = true
+        const response = await uni.request({
+          url: '/api/user/signature',
+          method: 'POST',
+          data: {
+            signature: sig
+          },
+          header: {
+            'Authorization': `Bearer ${uni.getStorageSync('token')}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (response[1].statusCode === 200 && response[1].data.success) {
+          uni.showToast({ title: '签名已保存', icon: 'success' })
+          this.emitProfileUpdate()
+        } else {
+          uni.showToast({ title: response[1].data.message || '签名保存失败', icon: 'none' })
+        }
+      } catch (error) {
+        console.error('签名保存失败:', error)
+        uni.showToast({ title: '签名保存失败', icon: 'none' })
+      } finally {
+        this.loading = false
+      }
     },
-    savePassword() {
+    async savePassword() {
       const { oldPassword, newPassword, confirmPassword } = this.accountForm
       if (!oldPassword || !newPassword || !confirmPassword) {
         uni.showToast({ title: '请填写完整信息', icon: 'none' })
@@ -185,11 +307,37 @@ export default {
         uni.showToast({ title: '两次输入不一致', icon: 'none' })
         return
       }
-      uni.showToast({ title: '密码已更新', icon: 'success' })
-      // TODO: 调用接口保存密码
-      this.accountForm.oldPassword = ''
-      this.accountForm.newPassword = ''
-      this.accountForm.confirmPassword = ''
+      
+      try {
+        this.loading = true
+        const response = await uni.request({
+          url: '/api/user/password',
+          method: 'POST',
+          data: {
+            oldPassword,
+            newPassword,
+            confirmPassword
+          },
+          header: {
+            'Authorization': `Bearer ${uni.getStorageSync('token')}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (response[1].statusCode === 200 && response[1].data.success) {
+          uni.showToast({ title: '密码已更新', icon: 'success' })
+          this.accountForm.oldPassword = ''
+          this.accountForm.newPassword = ''
+          this.accountForm.confirmPassword = ''
+        } else {
+          uni.showToast({ title: response[1].data.message || '密码修改失败', icon: 'none' })
+        }
+      } catch (error) {
+        console.error('密码修改失败:', error)
+        uni.showToast({ title: '密码修改失败', icon: 'none' })
+      } finally {
+        this.loading = false
+      }
     },
     emitProfileUpdate() {
       uni.$emit('profileUpdated', {
@@ -198,17 +346,39 @@ export default {
         signature: this.accountForm.signature.trim() || '记录生活 · 分享精彩'
       })
     },
-    handleLogout() {
+    async handleLogout() {
       uni.showModal({
         title: '提示',
         content: '确定要退出登录吗？',
-        success: (res) => {
+        success: async (res) => {
           if (res.confirm) {
-            uni.showToast({ title: '已退出登录', icon: 'success' })
-            // 延迟返回，让用户看到成功提示
-            setTimeout(() => {
-              uni.navigateBack()
-            }, 1500)
+            try {
+              this.loading = true
+              const response = await uni.request({
+                url: '/api/auth/logout',
+                method: 'POST',
+                header: {
+                  'Authorization': `Bearer ${uni.getStorageSync('token')}`
+                }
+              })
+              
+              if (response[1].statusCode === 200 && response[1].data.success) {
+                // 清除本地存储的token
+                uni.removeStorageSync('token')
+                uni.showToast({ title: '已退出登录', icon: 'success' })
+                // 延迟返回，让用户看到成功提示
+                setTimeout(() => {
+                  uni.navigateBack()
+                }, 1500)
+              } else {
+                uni.showToast({ title: response[1].data.message || '退出登录失败', icon: 'none' })
+              }
+            } catch (error) {
+              console.error('退出登录失败:', error)
+              uni.showToast({ title: '退出登录失败', icon: 'none' })
+            } finally {
+              this.loading = false
+            }
           }
         }
       })
@@ -462,6 +632,42 @@ export default {
 .btn-primary.block {
   width: 100%;
   margin-top: 10rpx;
+}
+
+/* 加载状态样式 */
+.loading-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.loading-icon {
+  font-size: 64rpx;
+  animation: spin 1.5s linear infinite;
+}
+
+.loading-text {
+  font-size: 30rpx;
+  color: #666;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>
 

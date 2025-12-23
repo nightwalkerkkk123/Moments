@@ -77,6 +77,8 @@
 </template>
 
 <script>
+import { authApi } from '../../services/api';
+
 export default {
   data() {
     return {
@@ -193,50 +195,64 @@ export default {
     },
     
     // 处理登录
-    handleLogin() {
+    async handleLogin() {
       if (!this.validateForm()) {
         return;
       }
 
       this.loading = true;
 
-      // 模拟登录请求
-      setTimeout(() => {
+      try {
+        // 调用登录API
+        const response = await authApi.login({
+          username: this.formData.username,
+          password: this.formData.password
+        });
+
         this.loading = false;
         this.showSuccess = true;
+
+        // 保存token和用户信息
+        uni.setStorageSync('token', response.data.token);
+        uni.setStorageSync('userInfo', response.data.userInfo);
 
         // 如果选择了记住密码，保存登录信息
         if (this.formData.rememberMe) {
           this.saveCredentials();
         }
 
-        // 模拟跳转到 discover 页面
+        // 跳转到 discover 页面
         uni.switchTab({
           url: '/pages/discover/discover'
         });
-      }, 1500);
+      } catch (error) {
+        this.loading = false;
+        uni.showToast({
+          title: error.message || '登录失败',
+          icon: 'none'
+        });
+      }
     },
     
     // 保存登录信息
-    saveCredentials() {
+    async saveCredentials() {
       try {
-        uni.setStorageSync('username', this.formData.username);
-        uni.setStorageSync('rememberMe', true);
+        await authApi.saveCredentials({
+          username: this.formData.username,
+          rememberMe: true
+        });
       } catch (e) {
         console.error('保存登录信息失败', e);
       }
     },
     
     // 加载保存的登录信息
-    loadSavedCredentials() {
+    async loadSavedCredentials() {
       try {
-        const rememberMe = uni.getStorageSync('rememberMe');
-        if (rememberMe) {
-          const username = uni.getStorageSync('username');
-          if (username) {
-            this.formData.username = username;
-            this.formData.rememberMe = true;
-          }
+        const response = await authApi.loadCredentials();
+        if (response.success && response.data.rememberMe) {
+          this.formData.username = response.data.username;
+          this.formData.rememberMe = true;
         }
       } catch (e) {
         console.error('加载登录信息失败', e);
@@ -244,11 +260,30 @@ export default {
     },
     
     // 忘记密码
-    handleForgotPassword() {
-      uni.showToast({
-        title: '忘记密码功能待实现',
-        icon: 'none'
-      });
+    async handleForgotPassword() {
+      try {
+        // 弹出输入框获取用户名
+        uni.showModal({
+          title: '忘记密码',
+          content: '请输入您的账号',
+          editable: true,
+          placeholderText: '账号',
+          success: async (res) => {
+            if (res.confirm && res.content) {
+              await authApi.forgotPassword({ username: res.content });
+              uni.showToast({
+                title: '重置密码链接已发送',
+                icon: 'success'
+              });
+            }
+          }
+        });
+      } catch (error) {
+        uni.showToast({
+          title: error.message || '操作失败',
+          icon: 'none'
+        });
+      }
     },
     
     // 跳转到注册页面

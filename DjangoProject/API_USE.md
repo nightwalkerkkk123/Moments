@@ -16,13 +16,42 @@
 
 ### 需要认证的接口
 
+#### 用户相关
 - `GET /api/users/` - 用户列表
 - `GET /api/users/{id}/` - 获取用户详情
 - `POST /api/users/` - 创建用户（等同于注册）
 - `PUT /api/users/{id}/` - 更新用户信息
 - `DELETE /api/users/{id}/` - 删除用户
-- `GET /api/users/me/` - 获取当前用户信息
+- `GET /api/user/current/` - 获取当前用户信息
 - `POST /api/auth/logout/` - 用户登出
+
+#### 动态相关
+- `POST /api/posts/` - 发布动态
+- `GET /api/user/posts/` - 获取我的动态
+- `DELETE /api/user/posts/{post_id}/` - 删除我的动态
+
+#### 文件上传
+- `POST /api/upload/image/` - 上传图片
+- `POST /api/upload/video/` - 上传视频
+
+#### 标签相关
+- `GET /api/tags/common/` - 获取常用标签
+- `POST /api/tags/` - 创建标签
+
+#### 互动相关
+- `POST /api/posts/{post_id}/like/` - 点赞/取消点赞
+- `GET /api/posts/{post_id}/comments/` - 获取评论
+- `POST /api/posts/{post_id}/comments/` - 创建评论
+
+#### 统计相关
+- `GET /api/user/stats/` - 获取我的统计信息
+
+#### 通知相关
+- `GET /api/notifications/` - 获取通知列表
+- `PUT /api/notifications/{notification_id}/read/` - 标记单个通知为已读
+- `PUT /api/notifications/read-all/` - 标记所有通知为已读
+- `DELETE /api/notifications/{notification_id}/delete/` - 删除单个通知
+- `DELETE /api/notifications/delete-all/` - 删除所有通知
 
 ## 配置说明
 

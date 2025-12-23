@@ -1,9 +1,23 @@
 from django.urls import path
-from .views import NotificationListView, MarkAsReadView
+from .views import (
+    get_notifications,
+    mark_notification_read,
+    mark_all_notifications_read,
+    delete_notification,
+    delete_all_notifications
+)
+
+app_name = 'notifications'
 
 urlpatterns = [
-    # 1. 去掉路由前缀"notifications"（主urls已挂载/api/notifications/，重复会导致路径错误）
-    # 2. 末尾加斜杠（和其他接口保持一致，避免APPEND_SLASH冲突）
-    path('', NotificationListView.as_view(), name='notification-list'),  # 获取通知：对应 /api/notifications/
-    path('mark-as-read/', MarkAsReadView.as_view(), name='mark-as-read'),  # 标记已读：对应 /api/notifications/mark-as-read/
+    # 获取通知列表
+    path('', get_notifications, name='get_notifications'),  # 对应 /api/notifications/
+    # 标记单个通知为已读
+    path('<int:notification_id>/read/', mark_notification_read, name='mark_notification_read'),  # 对应 /api/notifications/<id>/read/
+    # 标记所有通知为已读
+    path('read-all/', mark_all_notifications_read, name='mark_all_notifications_read'),  # 对应 /api/notifications/read-all/
+    # 删除单个通知
+    path('<int:notification_id>/delete/', delete_notification, name='delete_notification'),  # 对应 /api/notifications/<id>/delete/
+    # 删除所有通知
+    path('delete-all/', delete_all_notifications, name='delete_all_notifications'),  # 对应 /api/notifications/delete-all/
 ]

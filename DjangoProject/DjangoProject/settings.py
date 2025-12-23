@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -31,7 +32,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
+    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -40,12 +41,14 @@ INSTALLED_APPS = [
     # REST Framework
     "rest_framework",
     "rest_framework.authtoken",
-    'rest_framework_simplejwt',
+    "rest_framework_simplejwt",
     "corsheaders",
     # Local apps
     "api",
-    'posts',  # 发现: posts应用
-    'notifications',  # 发现: notifications应用
+    "my",
+    "notifications",
+    "publish",
+    "posts",  # 发现: posts应用
 ]
 
 MIDDLEWARE = [
@@ -128,6 +131,12 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# Media files (uploads)
+# https://docs.djangoproject.com/en/5.2/topics/files/
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -174,3 +183,21 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 # TEMPLATES is already configured above for admin application
 
+<<<<<<< HEAD
+=======
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / 'templates']
+        ,
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+>>>>>>> 5d40ec2 (“我的、发布”接口)

@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from .serializers import UserSerializer, UserCreateSerializer, PostSerializer, CommentSerializer, CreateCommentSerializer
 from .models import Post, Like, Comment
 
+
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer

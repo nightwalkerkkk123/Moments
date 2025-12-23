@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "notifications",
     "publish",
     "posts",  # 发现: posts应用
+    "setting",
 ]
 
 MIDDLEWARE = [
@@ -181,23 +182,3 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-# TEMPLATES is already configured above for admin application
-
-<<<<<<< HEAD
-=======
-TEMPLATES = [
-    {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / 'templates']
-        ,
-        "APP_DIRS": True,
-        "OPTIONS": {
-            "context_processors": [
-                "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
-                "django.contrib.messages.context_processors.messages",
-            ],
-        },
-    },
-]
->>>>>>> 5d40ec2 (“我的、发布”接口)

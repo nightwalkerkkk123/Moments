@@ -1,5 +1,5 @@
 <template>
-  <view class="login-container" :style="{ paddingTop: statusBarHeight + 'px' }">
+  <view class="login-container" :style="{ paddingTop: topPadding + 'px' }">
     <!-- Logo区域 -->
     <view class="logo-section">
       <view class="logo-circle">
@@ -17,14 +17,13 @@
       <view class="form-group" :class="{ error: errors.username }">
         <text class="label">账号</text>
         <view class="input-wrapper">
-          <input
-            type="text"
-            v-model.trim="formData.username"
-            class="form-input"
+          <input 
+            type="text" 
+            :value="formData.username"
+            class="form-input" 
             placeholder="请输入账号"
-            placeholder-style="color:#b2b2b2;"
             @blur="validateUsername"
-            @input="clearError('username')"
+            @input="handleUsernameInput"
             confirm-type="next"
           />
           <text class="input-icon">👤</text>
@@ -35,15 +34,13 @@
       <view class="form-group" :class="{ error: errors.password }">
         <text class="label">密码</text>
         <view class="input-wrapper">
-          <input
-            type="text"
+          <input 
             :password="!showPassword"
-            v-model="formData.password"
-            class="form-input"
+            :value="formData.password"
+            class="form-input" 
             placeholder="请输入密码"
-            placeholder-style="color:#b2b2b2;"
             @blur="validatePassword"
-            @input="clearError('password')"
+            @input="handlePasswordInput"
             confirm-type="done"
           />
           <text class="toggle-password" @click="togglePassword">
@@ -80,10 +77,14 @@
 </template>
 
 <script>
+import { authApi } from '../../services/api';
+
 export default {
   data() {
     return {
-      statusBarHeight: 0,
+      statusBarHeight: 0, // 状态栏高度
+      capsuleHeight: 0,   // 胶囊高度
+      topPadding: 0,      // 页面顶部预留边距
       formData: {
         username: '',
         password: '',
@@ -96,229 +97,302 @@ export default {
         username: '',
         password: ''
       }
-    }
+    };
   },
   onLoad() {
-    this.setStatusBar()
+    this.calculateSafeArea();
     // 页面加载时，可以检查是否有保存的登录信息
-    this.loadSavedCredentials()
+    this.loadSavedCredentials();
   },
   onShow() {
-    this.setStatusBar()
+    this.calculateSafeArea();
   },
   methods: {
+    calculateSafeArea() {
+      try {
+        const systemInfo = uni.getSystemInfoSync();
+        const menuButtonInfo = wx.getMenuButtonBoundingClientRect();
+
+        // 状态栏高度
+        const statusBarHeight = systemInfo.statusBarHeight || 0;
+
+        // 胶囊高度和顶部间距
+        const capsuleHeight = menuButtonInfo.height || 32;
+        const capsuleTop = menuButtonInfo.top || statusBarHeight;
+
+        // 计算顶部预留边距
+        const topPadding = capsuleTop + capsuleHeight + 8; // 额外预留 8px 间距
+
+        // 设置数据
+        this.statusBarHeight = statusBarHeight;
+        this.capsuleHeight = capsuleHeight;
+        this.topPadding = topPadding;
+      } catch (e) {
+        console.error('获取胶囊信息失败', e);
+      }
+    },
+
     // 切换密码显示/隐藏
     togglePassword() {
-      this.showPassword = !this.showPassword
+      this.showPassword = !this.showPassword;
     },
     
     // 切换记住密码
     toggleRememberMe() {
-      this.formData.rememberMe = !this.formData.rememberMe
+      this.formData.rememberMe = !this.formData.rememberMe;
     },
     
     // 验证账号
     validateUsername() {
       if (!this.formData.username.trim()) {
-        this.errors.username = '请输入账号'
-        return false
+        this.errors.username = '请输入账号';
+        return false;
       }
       if (this.formData.username.trim().length < 3) {
-        this.errors.username = '账号长度至少3位'
-        return false
+        this.errors.username = '账号长度至少3位';
+        return false;
       }
-      this.errors.username = ''
-      return true
+      this.errors.username = '';
+      return true;
     },
     
     // 验证密码
     validatePassword() {
       if (!this.formData.password) {
-        this.errors.password = '请输入密码'
-        return false
+        this.errors.password = '请输入密码';
+        return false;
       }
       if (this.formData.password.length < 6) {
-        this.errors.password = '密码长度至少6位'
-        return false
+        this.errors.password = '密码长度至少6位';
+        return false;
       }
-      this.errors.password = ''
-      return true
+      this.errors.password = '';
+      return true;
+    },
+    
+    // 处理账号输入
+    handleUsernameInput(e) {
+      this.formData.username = e.detail.value;
+      this.clearError('username');
+    },
+    
+    // 处理密码输入
+    handlePasswordInput(e) {
+      this.formData.password = e.detail.value;
+      this.clearError('password');
     },
     
     // 清除错误
     clearError(field) {
-      this.errors[field] = ''
+      this.errors[field] = '';
     },
     
     // 表单验证
     validateForm() {
-      const usernameValid = this.validateUsername()
-      const passwordValid = this.validatePassword()
-      return usernameValid && passwordValid
+      const usernameValid = this.validateUsername();
+      const passwordValid = this.validatePassword();
+      return usernameValid && passwordValid;
     },
     
     // 处理登录
-    handleLogin() {
+    async handleLogin() {
       if (!this.validateForm()) {
-        return
+        return;
       }
-      
-      this.loading = true
-      
-      // 模拟登录请求
-      setTimeout(() => {
-        this.loading = false
-        this.showSuccess = true
-        
+
+      this.loading = true;
+
+      try {
+        // 调用登录API
+        const response = await authApi.login({
+          username: this.formData.username,
+          password: this.formData.password
+        });
+
+        this.loading = false;
+        this.showSuccess = true;
+
+        // 保存token和用户信息
+        uni.setStorageSync('token', response.data.token);
+        uni.setStorageSync('userInfo', response.data.userInfo);
+
         // 如果选择了记住密码，保存登录信息
         if (this.formData.rememberMe) {
-          this.saveCredentials()
+          this.saveCredentials();
         }
-        
-        // 这里可以添加实际的登录逻辑
-        console.log('登录信息:', {
-          username: this.formData.username,
-          password: this.formData.password,
-          rememberMe: this.formData.rememberMe
-        })
-        
-        // 3秒后隐藏成功消息
-        setTimeout(() => {
-          this.showSuccess = false
-          // 可以在这里跳转到首页
-          // uni.switchTab({ url: '/pages/index/index' })
-        }, 3000)
-      }, 1500)
+
+        // 跳转到 discover 页面
+        uni.switchTab({
+          url: '/pages/discover/discover'
+        });
+      } catch (error) {
+        this.loading = false;
+        uni.showToast({
+          title: error.message || '登录失败',
+          icon: 'none'
+        });
+      }
     },
     
     // 保存登录信息
-    saveCredentials() {
+    async saveCredentials() {
       try {
-        uni.setStorageSync('username', this.formData.username)
-        uni.setStorageSync('rememberMe', true)
+        await authApi.saveCredentials({
+          username: this.formData.username,
+          rememberMe: true
+        });
       } catch (e) {
-        console.error('保存登录信息失败', e)
+        console.error('保存登录信息失败', e);
       }
     },
     
     // 加载保存的登录信息
-    loadSavedCredentials() {
+    async loadSavedCredentials() {
       try {
-        const rememberMe = uni.getStorageSync('rememberMe')
-        if (rememberMe) {
-          const username = uni.getStorageSync('username')
-          if (username) {
-            this.formData.username = username
-            this.formData.rememberMe = true
-          }
+        const response = await authApi.loadCredentials();
+        if (response.success && response.data.rememberMe) {
+          this.formData.username = response.data.username;
+          this.formData.rememberMe = true;
         }
       } catch (e) {
-        console.error('加载登录信息失败', e)
+        console.error('加载登录信息失败', e);
       }
     },
     
     // 忘记密码
-    handleForgotPassword() {
-      uni.showToast({
-        title: '忘记密码功能待实现',
-        icon: 'none'
-      })
+    async handleForgotPassword() {
+      try {
+        // 弹出输入框获取用户名
+        uni.showModal({
+          title: '忘记密码',
+          content: '请输入您的账号',
+          editable: true,
+          placeholderText: '账号',
+          success: async (res) => {
+            if (res.confirm && res.content) {
+              await authApi.forgotPassword({ username: res.content });
+              uni.showToast({
+                title: '重置密码链接已发送',
+                icon: 'success'
+              });
+            }
+          }
+        });
+      } catch (error) {
+        uni.showToast({
+          title: error.message || '操作失败',
+          icon: 'none'
+        });
+      }
     },
     
     // 跳转到注册页面
     goToRegister() {
       uni.navigateTo({
         url: '/pages/register/register'
-      })
-    },
-    setStatusBar() {
-      try {
-        const info = uni.getSystemInfoSync()
-        this.statusBarHeight = info.statusBarHeight || 0
-      } catch (e) {
-        this.statusBarHeight = 0
-      }
+      });
     }
   }
-}
+};
 </script>
 
 <style scoped>
 .login-container {
   min-height: 100vh;
-  background: #f6f6f6;
-  padding: 60rpx 40rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40rpx 30rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-sizing: border-box;
+  justify-content: center;
+  position: relative;
 }
 
 /* Logo区域 */
 .logo-section {
   text-align: center;
-  margin: 40rpx 0 50rpx;
+  margin-bottom: 70rpx;
 }
 
 .logo-circle {
-  width: 140rpx;
-  height: 140rpx;
-  background: #07c160;
+  width: 160rpx;
+  height: 160rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
-  margin: 0 auto 24rpx;
+  margin: 0 auto 30rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 12rpx 30rpx rgba(7, 193, 96, 0.25);
+  box-shadow: 0 16rpx 40rpx rgba(102, 126, 234, 0.4);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .logo-icon {
-  font-size: 70rpx;
-  color: #fff;
+  font-size: 80rpx;
 }
 
 .title {
   display: block;
-  color: #111;
-  font-size: 48rpx;
+  color: #333;
+  font-size: 56rpx;
   font-weight: 600;
-  margin-bottom: 10rpx;
+  margin-bottom: 16rpx;
 }
 
 .subtitle {
   display: block;
-  color: #808080;
-  font-size: 26rpx;
+  color: #999;
+  font-size: 28rpx;
 }
 
 /* 表单容器 */
 .form-container {
   width: 100%;
-  max-width: 820rpx;
-  background: #fff;
-  border-radius: 20rpx;
-  padding: 50rpx 36rpx;
-  box-shadow: 0 12rpx 40rpx rgba(0, 0, 0, 0.06);
-  box-sizing: border-box;
+  max-width: 800rpx;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 48rpx;
+  padding: 60rpx 40rpx;
+  box-shadow: 0 40rpx 120rpx rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(60rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 表单样式 */
 .form-group {
-  margin-bottom: 32rpx;
+  margin-bottom: 40rpx;
   position: relative;
 }
 
 .form-group.error .form-input {
-  border-color: #fa5151;
-  background: #fff7f7;
+  border-color: #ff4757;
 }
 
 .label {
   display: block;
-  color: #333;
+  color: #555;
   font-size: 28rpx;
   font-weight: 500;
-  margin-bottom: 12rpx;
+  margin-bottom: 16rpx;
 }
 
 .input-wrapper {
@@ -327,48 +401,54 @@ export default {
 
 .form-input {
   width: 100%;
-  height: 88rpx;
-  line-height: 88rpx;
-  padding: 0 90rpx 0 26rpx;
-  border: 2rpx solid #e5e5e5;
-  border-radius: 14rpx;
-  font-size: 30rpx;
-  background: #fafafa;
-  color: #111;
+  padding: 28rpx 90rpx 28rpx 30rpx;
+  border: 4rpx solid #e0e0e0;
+  border-radius: 24rpx;
+  font-size: 32rpx;
+  transition: all 0.3s ease;
+  background: #f8f9fa;
+  color: #333;
   box-sizing: border-box;
 }
 
 .form-input:focus {
-  border-color: #07c160;
+  border-color: #667eea;
   background: #fff;
-  box-shadow: 0 0 0 8rpx rgba(7, 193, 96, 0.12);
+  box-shadow: 0 0 0 8rpx rgba(102, 126, 234, 0.1);
 }
 
 .input-icon {
   position: absolute;
-  right: 24rpx;
+  right: 30rpx;
   top: 50%;
   transform: translateY(-50%);
-  color: #b2b2b2;
-  font-size: 34rpx;
+  color: #999;
+  font-size: 36rpx;
 }
 
 .toggle-password {
   position: absolute;
-  right: 24rpx;
+  right: 30rpx;
   top: 50%;
   transform: translateY(-50%);
-  color: #07c160;
-  font-size: 34rpx;
-  padding: 12rpx;
+  color: #999;
+  font-size: 36rpx;
+  padding: 10rpx;
   z-index: 10;
 }
 
 .error-message {
   display: block;
-  color: #fa5151;
-  font-size: 24rpx;
-  margin-top: 8rpx;
+  color: #ff4757;
+  font-size: 26rpx;
+  margin-top: 10rpx;
+  animation: shake 0.3s;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10rpx); }
+  75% { transform: translateX(10rpx); }
 }
 
 /* 记住密码和忘记密码 */
@@ -376,38 +456,39 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 40rpx 0;
-  font-size: 26rpx;
-  color: #555;
+  margin-bottom: 50rpx;
+  font-size: 28rpx;
 }
 
 .remember-me {
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 16rpx;
+  color: #666;
 }
 
 .forgot-password {
-  color: #07c160;
+  color: #667eea;
   font-weight: 500;
 }
 
 /* 登录按钮 */
 .login-button {
   width: 100%;
-  padding: 30rpx;
-  background: #07c160;
+  padding: 32rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 16rpx;
+  border-radius: 24rpx;
   font-size: 32rpx;
   font-weight: 600;
-  box-shadow: 0 12rpx 30rpx rgba(7, 193, 96, 0.25);
-  transition: opacity 0.2s ease;
+  box-shadow: 0 8rpx 30rpx rgba(102, 126, 234, 0.4);
+  transition: all 0.3s ease;
 }
 
 .login-button:active {
-  opacity: 0.86;
+  transform: translateY(2rpx);
+  box-shadow: 0 4rpx 15rpx rgba(102, 126, 234, 0.3);
 }
 
 .login-button[disabled] {
@@ -420,28 +501,40 @@ export default {
 
 /* 成功提示 */
 .success-message {
-  background: #07c160;
+  background: #2ed573;
   color: white;
   padding: 24rpx;
-  border-radius: 14rpx;
+  border-radius: 16rpx;
   text-align: center;
-  margin-bottom: 32rpx;
+  margin-bottom: 40rpx;
+  animation: slideDown 0.3s;
   width: 100%;
-  max-width: 820rpx;
-  box-shadow: 0 8rpx 24rpx rgba(7, 193, 96, 0.18);
+  max-width: 800rpx;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 注册链接 */
 .register-link {
   text-align: center;
-  margin-top: 28rpx;
-  color: #808080;
-  font-size: 26rpx;
+  margin-top: 30rpx;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 28rpx;
 }
 
 .register-link .link {
-  color: #07c160;
+  color: #fff;
   font-weight: 600;
+  text-decoration: underline;
   margin-left: 10rpx;
 }
 </style>

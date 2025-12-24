@@ -23,7 +23,6 @@
               v-model="formData.nickname"
               class="form-input" 
               placeholder="请输入昵称（2-20个字符）"
-            placeholder-style="color:#b2b2b2;"
               @blur="validateNickname"
               @input="clearError('nickname')"
             />
@@ -36,12 +35,10 @@
           <text class="label">密码</text>
           <view class="input-wrapper">
             <input 
-            type="text"
-            :password="!showPassword"
+              :type="showPassword ? 'text' : 'password'"
               v-model="formData.password"
               class="form-input" 
               placeholder="请输入密码（至少6位）"
-            placeholder-style="color:#b2b2b2;"
               @blur="validatePassword"
               @input="onPasswordInput"
             />
@@ -51,9 +48,9 @@
           </view>
           <view class="password-strength" v-if="formData.password.length > 0">
             <view class="strength-bar">
-              <view class="strength-fill" :class="passwordStrengthClass"></view>
+              <view class="strength-fill" :class="passwordStrengthData.class"></view>
             </view>
-            <text class="strength-text">密码强度：{{ passwordStrengthText }}</text>
+            <text class="strength-text">密码强度：{{ passwordStrengthData.text || '弱' }}</text>
           </view>
           <text class="error-message" v-if="errors.password">{{ errors.password }}</text>
         </view>
@@ -62,12 +59,10 @@
           <text class="label">确认密码</text>
           <view class="input-wrapper">
             <input 
-            type="text"
-            :password="!showConfirmPassword"
+              :type="showConfirmPassword ? 'text' : 'password'"
               v-model="formData.confirmPassword"
               class="form-input" 
               placeholder="请再次输入密码"
-            placeholder-style="color:#b2b2b2;"
               @blur="validateConfirmPassword"
               @input="clearError('confirmPassword')"
             />
@@ -108,7 +103,6 @@
             v-model="formData.age"
             class="form-input age-input" 
             placeholder="请输入年龄（18-100岁）"
-          placeholder-style="color:#b2b2b2;"
             @blur="validateAge"
             @input="clearError('age')"
           />
@@ -135,10 +129,13 @@
 </template>
 
 <script>
+import { registerApi } from '../../services/api';
 export default {
   data() {
     return {
-      statusBarHeight: 0,
+      statusBarHeight: 0, // 状态栏高度
+      capsuleHeight: 0,   // 胶囊高度
+      topPadding: 0,      // 页面顶部预留边距
       formData: {
         nickname: '',
         password: '',
@@ -150,6 +147,11 @@ export default {
       showConfirmPassword: false,
       loading: false,
       showSuccess: false,
+      passwordStrengthData: {
+        strength: 0,
+        text: '',
+        class: 'weak'
+      },
       errors: {
         nickname: '',
         password: '',
@@ -157,42 +159,24 @@ export default {
         gender: '',
         age: ''
       }
-    }
+    };
   },
-  computed: {
-    passwordStrength() {
-      const password = this.formData.password
-      if (password.length === 0) return 0
-      
-      let strength = 0
-      if (password.length >= 6) strength++
-      if (password.length >= 10) strength++
-      if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++
-      if (/\d/.test(password)) strength++
-      if (/[^a-zA-Z0-9]/.test(password)) strength++
-      
-      return strength
-    },
-    passwordStrengthClass() {
-      const strength = this.passwordStrength
-      if (strength <= 2) return 'weak'
-      if (strength <= 3) return 'medium'
-      return 'strong'
-    },
-    passwordStrengthText() {
-      const strength = this.passwordStrength
-      if (strength <= 2) return '弱'
-      if (strength <= 3) return '中'
-      return '强'
-    }
-  },
+  // 合并重复的 onLoad 生命周期（原代码有两个 onLoad，导致冲突）
   onLoad() {
-    this.setStatusBar()
+    this.calculateSafeArea();
+    this.setStatusBar();
   },
   onShow() {
-    this.setStatusBar()
+    this.setStatusBar();
+  },
+  computed: {
   },
   methods: {
+    // 新增：清除单个字段错误提示（原代码缺失，补充后表单输入时能正确清除错误）
+    clearError(field) {
+      this.errors[field] = '';
+    },
+
     // 切换密码显示/隐藏
     togglePassword(type) {
       if (type === 'password') {
@@ -209,16 +193,47 @@ export default {
     },
     
     // 密码输入
-    onPasswordInput() {
+    async onPasswordInput() {
       this.clearError('password')
       // 如果确认密码已输入，重新验证
       if (this.formData.confirmPassword) {
         this.validateConfirmPassword()
       }
+      
+      // 调用API验证密码强度
+      if (this.formData.password) {
+        try {
+          const response = await registerApi.validatePasswordStrength({
+            password: this.formData.password
+          })
+          
+          // 更新密码强度信息
+          this.passwordStrengthData = {
+            strength: response.data.strength,
+            text: response.data.text,
+            class: response.data.class
+          }
+        } catch (error) {
+          console.error('密码强度验证失败', error)
+          // 失败时使用默认值
+          this.passwordStrengthData = {
+            strength: 0,
+            text: '弱',
+            class: 'weak'
+          }
+        }
+      } else {
+        // 密码为空时重置
+        this.passwordStrengthData = {
+          strength: 0,
+          text: '',
+          class: 'weak'
+        }
+      }
     },
     
     // 验证昵称
-    validateNickname() {
+    async validateNickname() {
       const nickname = this.formData.nickname.trim()
       if (!nickname) {
         this.errors.nickname = '请输入昵称'
@@ -228,8 +243,16 @@ export default {
         this.errors.nickname = '昵称长度应为2-20个字符'
         return false
       }
-      this.errors.nickname = ''
-      return true
+      
+      try {
+        // 调用API检查昵称是否重复
+        await registerApi.checkNickname(nickname)
+        this.errors.nickname = ''
+        return true
+      } catch (error) {
+        this.errors.nickname = error.message || '昵称已被使用'
+        return false
+      }
     },
     
     // 验证密码
@@ -277,23 +300,50 @@ export default {
       this.errors.age = ''
       return true
     },
-    
-    // 清除错误
-    clearError(field) {
-      this.errors[field] = ''
+
+    // 计算顶部安全区域（兼容多端）
+    calculateSafeArea() {
+      try {
+        const systemInfo = uni.getSystemInfoSync();
+        // 兼容 uni 多端，改用 uni 内置方法获取胶囊信息
+        const menuButtonInfo = uni.getMenuButtonBoundingClientRect ? uni.getMenuButtonBoundingClientRect() : {};
+
+        // 状态栏高度
+        const statusBarHeight = systemInfo.statusBarHeight || 0;
+
+        // 胶囊高度和顶部间距（异常时用默认值）
+        const capsuleHeight = menuButtonInfo.height || 32;
+        const capsuleTop = menuButtonInfo.top || statusBarHeight;
+
+        // 计算顶部预留边距
+        const topPadding = capsuleTop + capsuleHeight + 8; // 额外预留 8px 间距
+
+        // 设置数据
+        this.statusBarHeight = statusBarHeight;
+        this.capsuleHeight = capsuleHeight;
+        this.topPadding = topPadding;
+      } catch (e) {
+        console.error('获取胶囊信息失败', e);
+        // 异常时设置默认值，避免页面错乱
+        this.statusBarHeight = 20;
+        this.topPadding = 60;
+      }
     },
+
+    // 修复：完整定义 setStatusBar 方法（原代码缺失方法包裹和 info 定义）
     setStatusBar() {
       try {
-        const info = uni.getSystemInfoSync()
-        this.statusBarHeight = info.statusBarHeight || 0
+        const info = uni.getSystemInfoSync(); // 正确定义 info 变量
+        this.statusBarHeight = info.statusBarHeight || 0;
       } catch (e) {
-        this.statusBarHeight = 0
+        console.error('获取状态栏高度失败', e);
+        this.statusBarHeight = 20; // 异常时默认值
       }
     },
     
     // 表单验证
-    validateForm() {
-      const nicknameValid = this.validateNickname()
+    async validateForm() {
+      const nicknameValid = await this.validateNickname()
       const passwordValid = this.validatePassword()
       const confirmPasswordValid = this.validateConfirmPassword()
       const ageValid = this.validateAge()
@@ -310,39 +360,57 @@ export default {
     },
     
     // 处理注册
-    handleRegister() {
-      if (!this.validateForm()) {
-        return
+    async handleRegister() {
+      if (!(await this.validateForm())) {
+        return;
       }
-      
-      this.loading = true
-      
-      // 模拟注册请求
-      setTimeout(() => {
-        this.loading = false
-        this.showSuccess = true
-        
-        // 这里可以添加实际的注册逻辑
-        console.log('注册信息:', {
+
+      this.loading = true;
+
+      try {
+        // 调用API进行注册
+        const response = await registerApi.register({
           nickname: this.formData.nickname,
           password: this.formData.password,
           gender: this.formData.gender,
-          age: this.formData.age
-        })
+          age: parseInt(this.formData.age)
+        });
         
-        // 3秒后跳转到登录页面
-        setTimeout(() => {
-          this.showSuccess = false
-          uni.navigateTo({
-            url: '/pages/login/login'
-          })
-        }, 3000)
-      }, 1500)
+        this.loading = false;
+        this.showSuccess = true;
+        
+        // 保存用户信息和token
+        uni.setStorageSync('token', response.data.token);
+        uni.setStorageSync('userInfo', response.data.userInfo);
+
+        // 跳转到 discover 页面（switchTab 用于 tabBar 页面）
+        uni.switchTab({
+          url: '/pages/discover/discover',
+          fail: (err) => {
+            // 若 discover 不是 tabBar 页面，改用 navigateTo
+            uni.navigateTo({ url: '/pages/discover/discover' });
+            console.warn('switchTab 失败，已改用 navigateTo', err);
+          }
+        });
+      } catch (error) {
+        this.loading = false;
+        uni.showToast({
+          title: error.message || '注册失败',
+          icon: 'none',
+          duration: 2000
+        });
+      }
     },
     
     // 跳转到登录页面
     goToLogin() {
-      uni.navigateBack()
+      uni.navigateBack({
+        delta: 1, // 返回上一页，若登录页是上级页面
+        fail: () => {
+          // 若返回失败，直接跳转登录页（避免页面栈异常）
+          uni.navigateTo({ url: '/pages/login/login' });
+        }
+      });
     }
   }
 }
@@ -351,86 +419,106 @@ export default {
 <style scoped>
 .register-container {
   min-height: 100vh;
-  background: #f6f6f6;
-  padding: 60rpx 40rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40rpx 30rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-sizing: border-box;
+  position: relative;
 }
 
 /* Logo区域 */
 .logo-section {
   text-align: center;
-  margin: 40rpx 0 50rpx;
+  margin-bottom: 50rpx;
 }
 
 .logo-circle {
-  width: 140rpx;
-  height: 140rpx;
-  background: #07c160;
+  width: 160rpx;
+  height: 160rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
-  margin: 0 auto 24rpx;
+  margin: 0 auto 30rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 12rpx 30rpx rgba(7, 193, 96, 0.25);
+  box-shadow: 0 16rpx 40rpx rgba(102, 126, 234, 0.4);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .logo-icon {
-  font-size: 70rpx;
-  color: #fff;
+  font-size: 80rpx;
 }
 
 .title {
   display: block;
-  color: #111;
-  font-size: 48rpx;
+  color: #333;
+  font-size: 56rpx;
   font-weight: 600;
-  margin-bottom: 10rpx;
+  margin-bottom: 16rpx;
 }
 
 .subtitle {
   display: block;
-  color: #808080;
-  font-size: 26rpx;
+  color: #999;
+  font-size: 28rpx;
 }
 
 /* 滚动容器 */
 .form-scroll {
   width: 100%;
-  max-width: 820rpx;
-  max-height: calc(100vh - 340rpx);
+  max-width: 800rpx;
+  max-height: calc(100vh - 400rpx);
   flex: 1;
 }
 
 /* 表单容器 */
 .form-container {
-  background: #fff;
-  border-radius: 20rpx;
-  padding: 50rpx 36rpx;
-  box-shadow: 0 12rpx 40rpx rgba(0, 0, 0, 0.06);
-  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 48rpx;
+  padding: 60rpx 40rpx;
+  box-shadow: 0 40rpx 120rpx rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(60rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 表单样式 */
 .form-group {
-  margin-bottom: 32rpx;
+  margin-bottom: 36rpx;
   position: relative;
 }
 
 .form-group.error .form-input,
 .form-group.error .age-input {
-  border-color: #fa5151;
-  background: #fff7f7;
+  border-color: #ff4757;
 }
 
 .label {
   display: block;
-  color: #333;
+  color: #555;
   font-size: 28rpx;
   font-weight: 500;
-  margin-bottom: 12rpx;
+  margin-bottom: 16rpx;
 }
 
 .input-wrapper {
@@ -440,52 +528,51 @@ export default {
 .form-input,
 .age-input {
   width: 100%;
-  height: 88rpx;
-  line-height: 88rpx;
-  padding: 0 90rpx 0 26rpx;
-  border: 2rpx solid #e5e5e5;
-  border-radius: 14rpx;
-  font-size: 30rpx;
-  background: #fafafa;
-  color: #111;
+  padding: 28rpx 90rpx 28rpx 30rpx;
+  border: 4rpx solid #e0e0e0;
+  border-radius: 24rpx;
+  font-size: 32rpx;
+  transition: all 0.3s ease;
+  background: #f8f9fa;
+  color: #333;
   box-sizing: border-box;
 }
 
 .form-input:focus,
 .age-input:focus {
-  border-color: #07c160;
+  border-color: #667eea;
   background: #fff;
-  box-shadow: 0 0 0 8rpx rgba(7, 193, 96, 0.12);
+  box-shadow: 0 0 0 8rpx rgba(102, 126, 234, 0.1);
 }
 
 .input-icon {
   position: absolute;
-  right: 24rpx;
+  right: 30rpx;
   top: 50%;
   transform: translateY(-50%);
-  color: #b2b2b2;
-  font-size: 34rpx;
+  color: #999;
+  font-size: 36rpx;
 }
 
 .toggle-password {
   position: absolute;
-  right: 24rpx;
+  right: 30rpx;
   top: 50%;
   transform: translateY(-50%);
-  color: #07c160;
-  font-size: 34rpx;
-  padding: 12rpx;
+  color: #999;
+  font-size: 36rpx;
+  padding: 10rpx;
   z-index: 10;
 }
 
 /* 密码强度 */
 .password-strength {
-  margin-top: 12rpx;
+  margin-top: 16rpx;
 }
 
 .strength-bar {
   height: 8rpx;
-  background: #e5e5e5;
+  background: #e0e0e0;
   border-radius: 4rpx;
   overflow: hidden;
   margin-bottom: 10rpx;
@@ -499,7 +586,7 @@ export default {
 
 .strength-fill.weak {
   width: 33%;
-  background: #fa5151;
+  background: #ff4757;
 }
 
 .strength-fill.medium {
@@ -509,7 +596,7 @@ export default {
 
 .strength-fill.strong {
   width: 100%;
-  background: #07c160;
+  background: #2ed573;
 }
 
 .strength-text {
@@ -521,7 +608,7 @@ export default {
 .gender-group {
   display: flex;
   gap: 24rpx;
-  margin-top: 12rpx;
+  margin-top: 16rpx;
 }
 
 .gender-option {
@@ -529,56 +616,64 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 26rpx 32rpx;
-  border: 2rpx solid #e5e5e5;
-  border-radius: 14rpx;
-  background: #fafafa;
+  padding: 28rpx 40rpx;
+  border: 4rpx solid #e0e0e0;
+  border-radius: 24rpx;
+  background: #f8f9fa;
   font-size: 30rpx;
-  color: #555;
+  color: #666;
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
 }
 
 .gender-option.active {
-  border-color: #07c160;
-  background: #e9f8f0;
-  color: #07c160;
-  box-shadow: 0 0 0 8rpx rgba(7, 193, 96, 0.12);
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  color: #667eea;
+  box-shadow: 0 0 0 8rpx rgba(102, 126, 234, 0.1);
 }
 
 .gender-icon {
-  margin-right: 14rpx;
-  font-size: 34rpx;
+  margin-right: 16rpx;
+  font-size: 36rpx;
 }
 
 .link {
-  color: #07c160;
+  color: #667eea;
   text-decoration: underline;
 }
 
 .error-message {
   display: block;
-  color: #fa5151;
-  font-size: 24rpx;
-  margin-top: 8rpx;
+  color: #ff4757;
+  font-size: 26rpx;
+  margin-top: 10rpx;
+  animation: shake 0.3s;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10rpx); }
+  75% { transform: translateX(10rpx); }
 }
 
 /* 注册按钮 */
 .register-button {
   width: 100%;
-  padding: 30rpx;
-  background: #07c160;
+  padding: 32rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 16rpx;
+  border-radius: 24rpx;
   font-size: 32rpx;
   font-weight: 600;
-  box-shadow: 0 12rpx 30rpx rgba(7, 193, 96, 0.25);
-  transition: opacity 0.2s ease;
+  box-shadow: 0 8rpx 30rpx rgba(102, 126, 234, 0.4);
+  transition: all 0.3s ease;
 }
 
 .register-button:active {
-  opacity: 0.86;
+  transform: translateY(2rpx);
+  box-shadow: 0 4rpx 15rpx rgba(102, 126, 234, 0.3);
 }
 
 .register-button[disabled] {
@@ -591,28 +686,40 @@ export default {
 
 /* 成功提示 */
 .success-message {
-  background: #07c160;
+  background: #2ed573;
   color: white;
   padding: 24rpx;
-  border-radius: 14rpx;
+  border-radius: 16rpx;
   text-align: center;
-  margin-bottom: 32rpx;
+  margin-bottom: 40rpx;
+  animation: slideDown 0.3s;
   width: 100%;
-  max-width: 820rpx;
-  box-shadow: 0 8rpx 24rpx rgba(7, 193, 96, 0.18);
+  max-width: 800rpx;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 登录链接 */
 .login-link {
   text-align: center;
-  margin-top: 28rpx;
-  color: #808080;
-  font-size: 26rpx;
+  margin-top: 30rpx;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 28rpx;
 }
 
 .login-link .link {
-  color: #07c160;
+  color: #fff;
   font-weight: 600;
+  text-decoration: underline;
   margin-left: 10rpx;
 }
 </style>

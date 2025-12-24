@@ -15,10 +15,27 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
-# from django.contrib import admin
+from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,  # 获取Token（登录）
+    TokenRefreshView,     # 刷新Token
+)
 
 urlpatterns = [
-    #    path("admin/", admin.site.urls),
+    path('admin/', admin.site.urls),  # Django后台管理地址
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),  # 登录接口
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # 刷新Token接口
     path('api/', include('api.urls')),
+    path('api/setting/', include('setting.urls')),
+    path('api/user/', include('my.urls')),  # 我的应用接口
+    path('api/posts/', include('posts.urls')),  # 发现应用接口（放在发布接口之前，确保 /api/posts/ 先匹配列表视图）
+    path('api/', include('publish.urls')),  # 发布应用接口
+    path('api/notifications/', include('notifications.urls')),  # 通知应用接口
 ]
+
+# Add media files URL configuration for development environment
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

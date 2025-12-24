@@ -592,3 +592,491 @@ Header: Authorization: Bearer <token>
 搜索建议接口需根据用户输入实时返回相关建议。
 搜索历史接口需支持分页功能（如历史记录较多时）。
 点赞和评论接口需返回最新的动态数据，确保前端实时更新。
+
+
+# 设置页面接口需求文档
+
+## 1. 获取用户个人信息接口
+
+**描述**  
+用于获取用户的个人信息，包括头像、昵称、个性签名等。
+
+**接口路径**: `/api/user/profile`  
+**请求方法**: GET  
+**请求参数**: 无  
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "avatar": "https://picsum.photos/200",
+    "nickname": "小程序用户",
+    "signature": "记录生活 · 分享精彩"
+  }
+}
+```
+
+## 2. 更新用户头像接口
+
+**描述**  
+用于更新用户的头像。
+
+**接口路径**: `/api/user/avatar`  
+**请求方法**: POST  
+**请求参数**:
+
+```json
+{
+  "avatar": "base64编码的图片数据或图片URL"
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "头像更新成功",
+  "data": {
+    "avatar": "https://picsum.photos/200"
+  }
+}
+```
+
+## 3. 更新用户昵称接口
+
+**描述**  
+用于更新用户的昵称。
+
+**接口路径**: `/api/user/nickname`  
+**请求方法**: POST  
+**请求参数**:
+
+```json
+{
+  "nickname": "新昵称"
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "昵称更新成功",
+  "data": {
+    "nickname": "新昵称"
+  }
+}
+```
+
+## 4. 更新个性签名接口
+
+**描述**  
+用于更新用户的个性签名。
+
+**接口路径**: `/api/user/signature`  
+**请求方法**: POST  
+**请求参数**:
+
+```json
+{
+  "signature": "新的个性签名"
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "签名更新成功",
+  "data": {
+    "signature": "新的个性签名"
+  }
+}
+```
+
+## 5. 修改密码接口
+
+**描述**  
+用于修改用户的登录密码。
+
+**接口路径**: `/api/user/password`  
+**请求方法**: POST  
+**请求参数**:
+
+```json
+{
+  "oldPassword": "旧密码",
+  "newPassword": "新密码",
+  "confirmPassword": "确认密码"
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "密码修改成功"
+}
+```
+
+## 6. 退出登录接口
+
+**描述**  
+用于用户退出登录。
+
+**接口路径**: `/api/auth/logout`  
+**请求方法**: POST  
+**请求参数**: 无  
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "已退出登录"
+}
+```
+
+---
+
+# 我的页面接口需求文档
+
+## 1. 获取我的动态列表接口
+
+**描述**  
+用于获取当前用户发布的动态列表。
+
+**接口路径**: `/api/user/posts`  
+**请求方法**: GET  
+**请求参数**:
+
+```json
+{
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "posts": [
+      {
+        "id": 101,
+        "avatar": "https://picsum.photos/200",
+        "nickname": "小程序用户",
+        "time": "昨天 21:30",
+        "text": "备忘：下周和朋友去露营，记得带咖啡壶。",
+        "type": "image",
+        "media": ["https://picsum.photos/400?7"],
+        "likes": 5,
+        "comments": 2,
+        "liked": false
+      }
+    ],
+    "total": 24
+  }
+}
+```
+
+## 2. 获取我的统计信息接口
+
+**描述**  
+用于获取当前用户的动态数量统计。
+
+**接口路径**: `/api/user/stats`  
+**请求方法**: GET  
+**请求参数**: 无  
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "posts": 24
+  }
+}
+```
+
+## 3. 删除我的动态接口
+
+**描述**  
+用于删除用户自己发布的动态。
+
+**接口路径**: `/api/user/posts/:id`  
+**请求方法**: DELETE  
+**请求参数**: 无  
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "删除成功"
+}
+```
+
+## 4. 点赞我的动态接口
+
+**描述**  
+用于点赞或取消点赞我的动态（与发现页相同接口）。
+
+**接口路径**: `/api/posts/:id/like`  
+**请求方法**: POST  
+**请求参数**:
+
+```json
+{
+  "liked": true
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "操作成功",
+  "data": {
+    "likes": 33
+  }
+}
+```
+
+## 5. 获取我的动态评论接口
+
+**描述**  
+用于获取我的动态的评论列表（与发现页相同接口）。
+
+**接口路径**: `/api/posts/:id/comments`  
+**请求方法**: GET  
+**请求参数**:
+
+```json
+{
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "comments": [
+      {
+        "id": 101,
+        "name": "小美",
+        "avatar": "https://picsum.photos/200?10",
+        "content": "风景真不错！下次也想去",
+        "time": "1分钟前"
+      }
+    ],
+    "total": 50
+  }
+}
+```
+
+## 6. 发布对我的动态的评论接口
+
+**描述**  
+用于发布对动态的评论（与发现页相同接口）。
+
+**接口路径**: `/api/posts/:id/comments`  
+**请求方法**: POST  
+**请求参数**:
+
+```json
+{
+  "content": "评论内容"
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "评论成功",
+  "data": {
+    "id": 201,
+    "name": "我",
+    "avatar": "https://picsum.photos/200",
+    "content": "这是我的评论",
+    "time": "刚刚"
+  }
+}
+```
+
+---
+
+# 发布页面接口需求文档
+
+## 1. 发布动态接口
+
+**描述**  
+用于发布新的动态，支持文字、图片、视频和标签。
+
+**接口路径**: `/api/posts`  
+**请求方法**: POST  
+**请求参数**:
+
+```json
+{
+  "content": "动态文字内容",
+  "images": ["图片URL1", "图片URL2"],
+  "video": "视频URL",
+  "videoPoster": "视频封面URL",
+  "tags": ["标签1", "标签2"]
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "发布成功",
+  "data": {
+    "id": 12345,
+    "name": "小程序用户",
+    "avatar": "https://picsum.photos/200",
+    "time": "刚刚",
+    "text": "动态文字内容",
+    "type": "image",
+    "media": ["图片URL1", "图片URL2"],
+    "tags": ["标签1", "标签2"],
+    "likes": 0,
+    "comments": 0,
+    "liked": false
+  }
+}
+```
+
+## 2. 图片上传接口
+
+**描述**  
+用于上传动态中的图片。
+
+**接口路径**: `/api/upload/image`  
+**请求方法**: POST  
+**请求参数**: FormData格式
+
+- file: 图片文件  
+  **响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://example.com/uploads/image.jpg"
+  }
+}
+```
+
+## 3. 视频上传接口
+
+**描述**  
+用于上传动态中的视频。
+
+**接口路径**: `/api/upload/video`  
+**请求方法**: POST  
+**请求参数**: FormData格式
+
+- file: 视频文件  
+  **响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://example.com/uploads/video.mp4",
+    "poster": "https://example.com/uploads/video-poster.jpg"
+  }
+}
+```
+
+## 4. 获取常用标签接口
+
+**描述**  
+用于获取系统常用的标签列表。
+
+**接口路径**: `/api/tags/common`  
+**请求方法**: GET  
+**请求参数**: 无  
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "tags": ["户外", "日常", "美食", "旅行", "运动", "摄影", "读书", "音乐", "电影", "宠物", "工作", "学习"]
+  }
+}
+```
+
+## 5. 创建新标签接口
+
+**描述**  
+用于创建新的自定义标签。
+
+**接口路径**: `/api/tags`  
+**请求方法**: POST  
+**请求参数**:
+
+```json
+{
+  "name": "新标签名称"
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "标签创建成功",
+  "data": {
+    "id": 1,
+    "name": "新标签名称"
+  }
+}
+```
+
+## 6. 获取用户信息接口（用于发布页面）
+
+**描述**  
+用于获取当前用户的信息，用于发布动态时显示。
+
+**接口路径**: `/api/user/current`  
+**请求方法**: GET  
+**请求参数**: 无  
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "avatar": "https://picsum.photos/200",
+    "nickname": "小程序用户"
+  }
+}
+```
+
+---
+
+## 备注
+
+1. 所有接口需要支持跨域请求
+2. 涉及用户身份的操作需要携带认证Token
+3. 上传接口需要支持大文件上传和进度显示
+4. 发布动态接口需要支持同时上传文字、图片、视频和标签
+5. 错误响应需包含明确的错误信息，便于前端处理

@@ -130,6 +130,8 @@
 </template>
 
 <script>
+import { postsApi, uploadApi } from '@/services/api.js';
+
 export default {
   data() {
     return {
@@ -144,7 +146,10 @@ export default {
       selectedTags: [],
       showTagModal: false,
       newTagName: '',
-      commonTags: ['户外', '日常', '美食', '旅行', '运动', '摄影', '读书', '音乐', '电影', '宠物', '工作', '学习']
+      commonTags: ['户外', '日常', '美食', '旅行', '运动', '摄影', '读书', '音乐', '电影', '宠物', '工作', '学习'],
+      // 加载状态
+      uploading: false,
+      publishing: false
     }
   },
   computed: {
@@ -301,75 +306,41 @@ export default {
 
       // 显示发布中状态
       uni.showLoading({ title: '发布中...', mask: true })
+      this.publishing = true
 
       try {
-        // 这里应该调用实际的API上传接口
-        // 模拟上传过程
-        await new Promise(resolve => setTimeout(resolve, 1500))
-
-        // 构建发布数据
+        // 准备发布数据
         const publishData = {
           content: this.content.trim(),
-          images: this.images,
-          video: this.video,
-          videoPoster: this.videoPoster,
-          tags: this.selectedTags,
-          timestamp: Date.now()
+          images: [],
+          video: '',
+          videoPoster: '',
+          tags: this.selectedTags
         }
 
-        // TODO: 调用实际的上传API
-        console.log('发布数据:', publishData)
-
-        // 格式化时间显示
-        const formatTime = (timestamp) => {
-          const now = Date.now()
-          const diff = now - timestamp
-          const minutes = Math.floor(diff / 60000)
-          if (minutes < 1) return '刚刚'
-          if (minutes < 60) return `${minutes}分钟前`
-          const hours = Math.floor(minutes / 60)
-          if (hours < 24) return `${hours}小时前`
-          const days = Math.floor(hours / 24)
-          if (days < 7) return `${days}天前`
-          return new Date(timestamp).toLocaleDateString()
+        // 上传图片
+        if (this.images.length > 0) {
+          this.uploading = true
+          const imageUploadPromises = this.images.map(imgPath => uploadApi.uploadImage(imgPath))
+          const imageResults = await Promise.all(imageUploadPromises)
+          publishData.images = imageResults.map(res => res.data.url)
         }
 
-        // 构建新帖子数据（用于添加到首页）
-        const newPost = {
-          id: Date.now(), // 使用时间戳作为ID
-          name: this.currentUser.nickname || '我',
-          avatar: this.currentUser.avatar || 'https://picsum.photos/200',
-          isMine: true,
-          time: formatTime(publishData.timestamp),
-          text: publishData.content,
-          type: publishData.video ? 'video' : (publishData.images.length > 0 ? 'image' : 'text'),
-          media: publishData.video ? publishData.video : publishData.images,
-          poster: publishData.videoPoster || '',
-          tag: publishData.tags.length > 0 ? publishData.tags[0] : '',
-          tags: publishData.tags,
-          likes: 0,
-          comments: 0,
-          liked: false
+        // 上传视频
+        if (this.video) {
+          this.uploading = true
+          const videoResult = await uploadApi.uploadVideo(this.video)
+          publishData.video = videoResult.data.url
+          
+          // 上传视频封面
+          if (this.videoPoster) {
+            const posterResult = await uploadApi.uploadImage(this.videoPoster)
+            publishData.videoPoster = posterResult.data.url
+          }
         }
 
-        // 构建我的动态数据
-        const myPost = {
-          id: Date.now(),
-          time: formatTime(publishData.timestamp),
-          text: publishData.content,
-          type: publishData.video ? 'video' : (publishData.images.length > 0 ? 'image' : 'text'),
-          media: publishData.video ? publishData.video : publishData.images,
-          avatar: this.currentUser.avatar || 'https://picsum.photos/200',
-          name: this.currentUser.nickname || '我',
-          poster: publishData.videoPoster || '',
-          isMine: true
-        }
-
-        // 通过事件总线通知首页更新
-        uni.$emit('newPostPublished', {
-          discoverPost: newPost,
-          myPost: myPost
-        })
+        // 调用发布动态接口
+        const response = await postsApi.createPost(publishData)
 
         uni.hideLoading()
         uni.showToast({ title: '发布成功', icon: 'success' })
@@ -382,6 +353,9 @@ export default {
         uni.hideLoading()
         uni.showToast({ title: '发布失败，请重试', icon: 'none' })
         console.error('发布失败', error)
+      } finally {
+        this.publishing = false
+        this.uploading = false
       }
     }
   }

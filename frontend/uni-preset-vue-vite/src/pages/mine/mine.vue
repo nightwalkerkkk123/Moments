@@ -122,6 +122,8 @@
 </template>
 
 <script>
+import { userApi, postsApi } from '@/services/api.js';
+
 export default {
   data() {
     return {
@@ -131,31 +133,8 @@ export default {
         nickname: '小程序用户',
         signature: '记录生活 · 分享精彩'
       },
-      myPosts: [
-        {
-          id: 101,
-          time: '昨天 21:30',
-          text: '备忘：下周和朋友去露营，记得带咖啡壶。',
-          type: 'image',
-          media: ['https://picsum.photos/400?7'],
-          likes: 5,
-          comments: 2,
-          liked: false
-        },
-        {
-          id: 102,
-          time: '3天前',
-          text: '小程序 UI 草稿完成，准备上线～',
-          type: 'image',
-          media: ['https://picsum.photos/400?8', 'https://picsum.photos/400?9'],
-          likes: 8,
-          comments: 1,
-          liked: true
-        }
-      ],
-      myStats: {
-        posts: 24
-      },
+      myPosts: [], // 初始化为空数组，从后端加载数据
+      myStats: {}, // 初始化为空对象，从后端加载数据
       showDeleteModal: false,
       deletePostId: null,
       showCommentModal: false,
@@ -163,11 +142,23 @@ export default {
       currentPostComments: [],
       newCommentText: '',
       submittingComment: false,
-      commentsData: {}
+      commentsData: {},
+      // 分页相关
+      currentPage: 1,
+      pageSize: 10,
+      hasMore: true,
+      // 加载状态
+      loadingPosts: false,
+      loadingStats: false,
+      loadingComments: false,
     }
   },
   onLoad() {
     this.setStatusBar()
+    // 加载初始数据
+    this.loadMyStats()
+    this.loadMyPosts()
+    
     // 监听发布事件，把自己的帖子加入列表
     this.__newMyPostHandler = (payload = {}) => {
       if (payload.myPost) {
@@ -221,6 +212,51 @@ export default {
         this.statusBarHeight = 0
       }
     },
+    // 加载我的动态列表
+    async loadMyPosts() {
+      if (this.loadingPosts || !this.hasMore) return
+      
+      this.loadingPosts = true
+      try {
+        const response = await userApi.getMyPosts({ page: this.currentPage, pageSize: this.pageSize })
+        if (response.success && response.data && response.data.posts) {
+          const newPosts = response.data.posts
+          this.myPosts = this.currentPage === 1 ? newPosts : [...this.myPosts, ...newPosts]
+          this.hasMore = newPosts.length === this.pageSize
+          if (this.hasMore) {
+            this.currentPage++
+          }
+        } else {
+          this.hasMore = false
+        }
+      } catch (error) {
+        uni.showToast({
+          title: '加载动态失败',
+          icon: 'none'
+        })
+        console.error('加载我的动态失败:', error)
+      } finally {
+        this.loadingPosts = false
+      }
+    },
+    // 加载我的统计信息
+    async loadMyStats() {
+      this.loadingStats = true
+      try {
+        const response = await userApi.getStats()
+        if (response.success && response.data) {
+          this.myStats = response.data
+        }
+      } catch (error) {
+        uni.showToast({
+          title: '加载统计信息失败',
+          icon: 'none'
+        })
+        console.error('加载统计信息失败:', error)
+      } finally {
+        this.loadingStats = false
+      }
+    },
     handlePublish() {
       // 跳转到发动态页面
       uni.navigateTo({
@@ -242,42 +278,83 @@ export default {
       this.showDeleteModal = false
       this.deletePostId = null
     },
-    confirmDelete() {
+    async confirmDelete() {
       if (!this.deletePostId) return
       
-      // 找到要删除的帖子索引
-      const index = this.myPosts.findIndex(item => item.id === this.deletePostId)
-      if (index !== -1) {
-        // 从数组中移除
-        this.myPosts.splice(index, 1)
-        // 更新帖子数量统计
-        this.myStats.posts = Math.max(0, this.myStats.posts - 1)
+      try {
+        // 调用后端删除接口
+        await postsApi.deletePost(this.deletePostId)
         
-        // 删除对应的评论数据
-        delete this.commentsData[this.deletePostId]
-        
-        // 如果当前打开的评论弹窗是删除的帖子，关闭评论弹窗
-        if (this.currentPostId === this.deletePostId) {
-          this.closeCommentModal()
+        // 找到要删除的帖子索引
+        const index = this.myPosts.findIndex(item => item.id === this.deletePostId)
+        if (index !== -1) {
+          // 从数组中移除
+          this.myPosts.splice(index, 1)
+          // 更新帖子数量统计
+          this.myStats.posts = Math.max(0, this.myStats.posts - 1)
+          
+          // 删除对应的评论数据
+          delete this.commentsData[this.deletePostId]
+          
+          // 如果当前打开的评论弹窗是删除的帖子，关闭评论弹窗
+          if (this.currentPostId === this.deletePostId) {
+            this.closeCommentModal()
+          }
         }
         
         uni.showToast({
           title: '删除成功',
           icon: 'success'
         })
+      } catch (error) {
+        uni.showToast({
+          title: '删除失败',
+          icon: 'none'
+        })
+        console.error('删除动态失败:', error)
       }
       
       this.closeDeleteModal()
     },
     
-    toggleLike(item) {
-      item.liked = !item.liked
-      item.likes += item.liked ? 1 : -1
-      this.$forceUpdate()
+    async toggleLike(item) {
+      try {
+        // 调用后端点赞接口
+        const response = await postsApi.likePost(item.id, { liked: !item.liked })
+        
+        // 更新本地状态
+        item.liked = !item.liked
+        item.likes = response.data.likes
+      } catch (error) {
+        uni.showToast({
+          title: '操作失败',
+          icon: 'none'
+        })
+        console.error('点赞操作失败:', error)
+      }
     },
-    handleComment(item) {
+    async handleComment(item) {
       this.currentPostId = item.id
-      this.currentPostComments = this.commentsData[item.id] || []
+      this.loadingComments = true
+      
+      try {
+        // 调用后端获取评论接口
+        const response = await postsApi.getComments(item.id, { page: 1, pageSize: 100 })
+        if (response.success && response.data && response.data.comments) {
+          this.currentPostComments = response.data.comments
+          this.commentsData[item.id] = response.data.comments
+        }
+      } catch (error) {
+        uni.showToast({
+          title: '加载评论失败',
+          icon: 'none'
+        })
+        console.error('加载评论失败:', error)
+        this.currentPostComments = this.commentsData[item.id] || []
+      } finally {
+        this.loadingComments = false
+      }
+      
       this.showCommentModal = true
       this.newCommentText = ''
     },
@@ -296,30 +373,33 @@ export default {
 
       this.submittingComment = true
 
-      setTimeout(() => {
-        const newComment = {
-          id: Date.now(),
-          name: '我',
-          avatar: 'https://picsum.photos/200',
-          content: content,
-          time: '刚刚'
-        }
+      try {
+        // 调用后端发布评论接口
+        const response = await postsApi.addComment(this.currentPostId, { content })
+        
+        if (response.success && response.data) {
+          // 更新评论列表
+          if (!this.commentsData[this.currentPostId]) {
+            this.commentsData[this.currentPostId] = []
+          }
+          this.commentsData[this.currentPostId].unshift(response.data)
+          this.currentPostComments = this.commentsData[this.currentPostId]
 
-        if (!this.commentsData[this.currentPostId]) {
-          this.commentsData[this.currentPostId] = []
-        }
-        this.commentsData[this.currentPostId].unshift(newComment)
-        this.currentPostComments = this.commentsData[this.currentPostId]
+          // 更新对应帖子的评论数
+          const myPost = this.myPosts.find(p => p.id === this.currentPostId)
+          if (myPost) {
+            myPost.comments = (myPost.comments || 0) + 1
+          }
 
-        const myPost = this.myPosts.find(p => p.id === this.currentPostId)
-        if (myPost) {
-          myPost.comments = (myPost.comments || 0) + 1
+          this.newCommentText = ''
+          uni.showToast({ title: '评论成功', icon: 'success' })
         }
-
-        this.newCommentText = ''
+      } catch (error) {
+        uni.showToast({ title: '评论失败', icon: 'none' })
+        console.error('发布评论失败:', error)
+      } finally {
         this.submittingComment = false
-        uni.showToast({ title: '评论成功', icon: 'success' })
-      }, 500)
+      }
     }
   }
 }

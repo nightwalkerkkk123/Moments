@@ -126,10 +126,11 @@ class PostSerializer(serializers.ModelSerializer):
     comment = serializers.SerializerMethodField(read_only=True)
     is_liked = serializers.SerializerMethodField(read_only=True)
     time = serializers.SerializerMethodField(read_only=True)
+    content = serializers.CharField(source='text', read_only=True)  # 添加content字段，映射到text
 
     class Meta:
         model = Post
-        fields = ['id', 'user', 'text', 'type', 'media', 'created_at', 'likes_count', 'comments_count', 'comment', 'is_liked', 'time']
+        fields = ['id', 'user', 'text', 'content', 'type', 'media', 'created_at', 'likes_count', 'comments_count', 'comment', 'is_liked', 'time']
         read_only_fields = ['id', 'user', 'likes_count', 'comments_count', 'comment', 'is_liked', 'time']
 
     def get_comment(self, obj):

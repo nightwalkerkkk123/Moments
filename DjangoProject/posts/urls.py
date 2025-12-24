@@ -7,7 +7,7 @@ from .views import (
 
 urlpatterns = [
     # 获取动态列表
-    path('', PostListView.as_view(), name='post-list'),
+    path('list/', PostListView.as_view(), name='post-list'),
     # 点赞接口
     path('<int:pk>/like/', LikePostView.as_view(), name='post-like'),
     # 评论接口（GET/POST）

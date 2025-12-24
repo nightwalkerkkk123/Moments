@@ -3,17 +3,13 @@ from django.contrib.auth.models import User
 from api.models import Post, Tag
 from api.serializers import PostSerializer
 
-class CreatePostSerializer(serializers.ModelSerializer):
+class CreatePostSerializer(serializers.Serializer):
     """发布动态序列化器"""
-    content = serializers.CharField(source='text', required=False)
+    text = serializers.CharField(required=False, default='')
     images = serializers.ListField(required=False, default=[])
     video = serializers.CharField(required=False, default='')
     videoPoster = serializers.CharField(required=False, default='')
     tags = serializers.ListField(child=serializers.CharField(), required=False, default=[])
-    
-    class Meta:
-        model = Post
-        fields = ['content', 'images', 'video', 'videoPoster', 'tags']
     
     def validate(self, data):
         """验证输入数据"""

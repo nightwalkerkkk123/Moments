@@ -17,10 +17,12 @@ from .serializers import CreatePostSerializer, CreateTagSerializer, CurrentUserS
 @permission_classes([IsAuthenticated])
 def create_post(request):
     """发布动态接口"""
+    print(f"Request data: {request.data}")  # 添加调试信息
     serializer = CreatePostSerializer(data=request.data)
     
     if serializer.is_valid():
         validated_data = serializer.validated_data
+        print(f"Validated data: {validated_data}")  # 添加调试信息
         user = request.user
         
         # 确定动态类型
@@ -63,12 +65,13 @@ def create_post(request):
             'message': '发布成功',
             'data': post_serializer.data
         }, status=status.HTTP_201_CREATED)
-    
-    return Response({
-        'success': False,
-        'message': '发布失败',
-        'errors': serializer.errors
-    }, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        print(f"Serializer errors: {serializer.errors}")  # 添加调试信息
+        return Response({
+            'success': False,
+            'message': '发布失败',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

@@ -17,7 +17,7 @@ class Profile(models.Model):
 
 class Post(models.Model):
     """动态模型"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='api_posts')
     text = models.TextField(blank=True, default='')
     type = models.CharField(max_length=20, default='text')  # image, text, etc.
     media = models.JSONField(default=list)  # 存储媒体URL列表

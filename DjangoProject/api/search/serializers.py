@@ -1,35 +1,46 @@
 ####################  搜索部分开始  ######################
 from rest_framework import serializers
-from .models import Post, SearchHistory   # 现在从当前包引
+from django.contrib.auth import get_user_model
+from api.models import Post
+from .models import SearchHistory
+
+User = get_user_model()
+
 # --------------- 1.Post  ---------------
 class PostSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source='author.username', read_only=True)
+    name = serializers.CharField(source='user.username', read_only=True)
     avatar = serializers.SerializerMethodField()
     time = serializers.SerializerMethodField()
     liked = serializers.SerializerMethodField()
-    # 尝试实时更新评论数
-    comments = serializers.IntegerField(source='comment_set.count', read_only=True)
+    likes = serializers.SerializerMethodField()
+    comments = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ['id','name','avatar','time','text','type','media',
-                  'tag','likes','comments','liked']
+        fields = ['id', 'name', 'avatar', 'time', 'text', 'type', 'media',
+                  'likes', 'comments', 'liked']
 
     def get_avatar(self, obj):
-        # 用户头像字段，如无则返回默认
-        return getattr(obj.author, 'avatar', 'https://picsum.photos/200')
+        profile = getattr(obj.user, 'profile', None)
+        if profile and profile.avatar:
+            return profile.avatar
+        return 'https://picsum.photos/200'
 
     def get_time(self, obj):
-        # 友好时间
         from django.utils.timesince import timesince
         return timesince(obj.created_at, locale='zh_CN') + '前'
 
     def get_liked(self, obj):
-        # 当前登录用户是否点过赞（需传request上下文）
         user = self.context['request'].user
         if user.is_authenticated:
-            return obj.like_set.filter(user=user).exists()
+            return obj.likes.filter(user=user).exists()
         return False
+
+    def get_likes(self, obj):
+        return obj.likes_count
+
+    def get_comments(self, obj):
+        return obj.comments_count
 
 # --------------- 2.搜索历史  ---------------
 class SearchHistorySerializer(serializers.ModelSerializer):

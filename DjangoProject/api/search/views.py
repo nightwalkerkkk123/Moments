@@ -4,7 +4,8 @@ from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Q, Count
-from .models import Post, SearchHistory
+from api.models import Post
+from .models import SearchHistory
 from .serializers import PostSerializer, SearchHistorySerializer
 from datetime import datetime
 # 需要用到 User
